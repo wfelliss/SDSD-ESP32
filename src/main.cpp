@@ -1,140 +1,91 @@
 #include <WiFi.h>
+#include <FS.h>
+#include <SPIFFS.h>
+#include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <Preferences.h>
 
-Preferences preferences;
 AsyncWebServer server(80);
 
-// ===== CONFIG =====
-const char* ap_ssid = "ESP32_Config";
-const char* ap_password = "12345678";
+// Variables to store user WiFi credentials
+String ssidInput = "";
+String passwordInput = "";
 
-String ssid = "";
-String password = "";
+// Flag to indicate WiFi connection
+bool wifiConnected = false;
 
-// HTML for Wi-Fi setup page
-const char* configPage = R"rawliteral(
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>WiFi Setup</title>
-    <style>
-      body { font-family: Arial; max-width: 400px; margin: 50px auto; text-align: center; }
-      input { width: 100%; padding: 8px; margin: 8px 0; }
-      button { padding: 10px 20px; }
-    </style>
-  </head>
-  <body>
-    <h2>Configure WiFi</h2>
-    <form action="/save" method="POST">
-      <input type="text" name="ssid" placeholder="WiFi SSID" required><br>
-      <input type="password" name="pass" placeholder="WiFi Password" required><br>
-      <button type="submit">Save & Connect</button>
-    </form>
-  </body>
-</html>
-)rawliteral";
+void connectToWiFi() {
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssidInput.c_str(), passwordInput.c_str());
 
-// HTML for connected page
-const char* connectedPage = R"rawliteral(
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Connected</title>
-    <style>body { font-family: Arial; text-align: center; margin-top: 50px; }</style>
-  </head>
-  <body>
-    <h2>✅ ESP32 Connected to WiFi!</h2>
-  </body>
-</html>
-)rawliteral";
-
-// ===== Function Declarations =====
-void startAPMode();
-void startSTAMode();
-
-// ===== Setup WiFi in STA Mode =====
-void startSTAMode() {
-  Serial.printf("Connecting to SSID: %s\n", ssid.c_str());
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), password.c_str());
-
-  int retry = 0;
-  while (WiFi.status() != WL_CONNECTED && retry < 20) {
-    delay(500);
-    Serial.print(".");
-    retry++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nConnected!");
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
-
-    server.reset();
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-      request->send(200, "text/html", connectedPage);
-    });
-    server.begin();
-  } else {
-    Serial.println("\nFailed to connect — reverting to AP mode.");
-    startAPMode();
-  }
-}
-
-// ===== Setup WiFi in AP Mode =====
-void startAPMode() {
-  Serial.println("Starting Access Point...");
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(ap_ssid, ap_password);
-
-  Serial.print("AP IP address: ");
-  Serial.println(WiFi.softAPIP());
-
-  server.reset();
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-    request->send(200, "text/html", configPage);
-  });
-
-  server.on("/save", HTTP_POST, [](AsyncWebServerRequest* request) {
-    String newSSID, newPASS;
-    if (request->hasParam("ssid", true)) newSSID = request->getParam("ssid", true)->value();
-    if (request->hasParam("pass", true)) newPASS = request->getParam("pass", true)->value();
-
-    if (newSSID != "" && newPASS != "") {
-      ssid = newSSID;
-      password = newPASS;
-
-      preferences.putString("ssid", ssid);
-      preferences.putString("pass", password);
-
-      request->send(200, "text/html", "<h2>Saved! Connecting...</h2>");
-      delay(2000);
-      startSTAMode();
-    } else {
-      request->send(400, "text/plain", "Missing SSID or password!");
+    Serial.print("Connecting to WiFi");
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
     }
-  });
 
-  server.begin();
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\nConnected!");
+        Serial.print("IP address: ");
+        Serial.println(WiFi.localIP());
+        wifiConnected = true;
+
+        // Optional: Stop AP
+        WiFi.softAPdisconnect(true);
+
+    } else {
+        Serial.println("\nFailed to connect. Restart ESP to retry.");
+        wifiConnected = false;
+    }
 }
 
 void setup() {
-  Serial.begin(115200);
-  preferences.begin("wifi", false);
+    Serial.begin(115200);
 
-  ssid = preferences.getString("ssid", "");
-  password = preferences.getString("pass", "");
+    // Mount SPIFFS
+    if (!SPIFFS.begin(true)) {
+        Serial.println("Failed to mount SPIFFS");
+        return;
+    }
 
-  if (ssid.length() > 0 && password.length() > 0) {
-    Serial.println("Found saved credentials. Trying to connect...");
-    startSTAMode();
-  } else {
-    Serial.println("No saved credentials. Starting AP mode.");
-    startAPMode();
-  }
+    // Start in AP mode for WiFi setup
+    WiFi.softAP("ESP32-Setup", "12345678");
+    Serial.println("AP Started. Connect to WiFi 'ESP32-Setup' to configure");
+
+    // Serve WiFi config page
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (wifiConnected) {
+            request->redirect("/connected");
+        } else {
+            request->send(SPIFFS, "/index.html", "text/html");
+        }
+    });
+
+    // Handle WiFi form submission
+    server.on("/connect", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
+            ssidInput = request->getParam("ssid", true)->value();
+            passwordInput = request->getParam("password", true)->value();
+            request->send(200, "text/html", "<h1>Connecting...</h1><p>ESP will try to connect to WiFi</p>");
+            connectToWiFi();
+        } else {
+            request->send(400, "text/plain", "Missing SSID or password");
+        }
+    });
+
+    // Serve connected page
+    server.on("/connected", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (wifiConnected) {
+            request->send(SPIFFS, "/connected.html", "text/html");
+        } else {
+            request->redirect("/");
+        }
+    });
+
+    server.begin();
 }
 
 void loop() {
-  // Nothing needed — handled asynchronously!
+    // Nothing needed here; everything handled via async web server
 }
