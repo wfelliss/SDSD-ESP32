@@ -2,11 +2,32 @@
 <html>
 <head>
     <title>ESP32 Connected</title>
-    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>ESP32 is connected!</h1>
-    <p>IP: <span id="ip"></span></p>
-    <script src="script.js"></script>
+    <h1>Connected to WiFi!</h1>
+    <h2>Recorded Runs</h2>
+    <div id="runsContainer">
+        Loading runs...
+    </div>
+
+    <script>
+        async function loadRuns() {
+            const response = await fetch('/runs');
+            const runs = await response.json();
+            const container = document.getElementById('runsContainer');
+            if (runs.length === 0) {
+                container.innerHTML = "<p>No runs recorded yet.</p>";
+            } else {
+                let html = "<ul>";
+                runs.forEach((run, index) => {
+                    html += `<li>Run ${index + 1} (${run.length} samples) <button>Upload</button></li>`;
+                });
+                html += "</ul>";
+                container.innerHTML = html;
+            }
+        }
+
+        loadRuns();
+    </script>
 </body>
 </html>
