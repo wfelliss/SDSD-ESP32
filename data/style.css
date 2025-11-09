@@ -1,0 +1,137 @@
+/* Reset defaults */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Body and container */
+body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    background: #f2f2f2;
+    padding: 20px;
+}
+
+.container {
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+    background: #fff;
+    padding: 30px 25px;
+    border-radius: 15px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+
+/* Headings */
+h1 {
+    font-size: 2em;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+h2 {
+    font-size: 1.5em;
+    color: #555;
+    margin-bottom: 20px;
+}
+
+/* Form styling (WiFi page) */
+form {
+    width: 100%;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+label {
+    display: block; /* ensures label is on its own line */
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #555555;
+}
+
+input {
+    width: 100%;
+    padding: 12px 15px;
+    border-radius: 10px;
+    border: 1px solid #cccccc;
+    font-size: 1em;
+}
+
+input:focus {
+    border-color: #007BFF;
+    outline: none;
+    box-shadow: 0 0 5px rgba(0,123,255,0.3);
+}
+
+/* Runs container (Connected page) */
+.runs-container {
+    background: #fff;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+}
+
+.runs-container ul {
+    list-style: none;
+    padding: 0;
+}
+
+.runs-container li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    font-size: 1em;
+}
+
+.runs-container li:last-child {
+    border-bottom: none;
+}
+
+/* Buttons */
+button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    background: #007BFF;
+    color: #fff;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #0056b3;
+}
+
+/* Paragraphs */
+p {
+    font-size: 1em;
+    color: #666;
+}
+
+/* Responsive mobile styling */
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.6em;
+    }
+    h2 {
+        font-size: 1.3em;
+    }
+    .runs-container li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    button {
+        width: 100%;
+    }
+}
