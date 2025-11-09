@@ -235,6 +235,9 @@ void setup() {
         while(true) delay(1000); // halt here
     }
 
+    server.serveStatic("/style.css", SPIFFS, "/style.css");
+    server.serveStatic("/script.js", SPIFFS, "/script.js");
+
     // Start tasks on separate cores
     xTaskCreatePinnedToCore(WiFiTaskcode, "WiFiTask", 12000, NULL, 1, &WiFiTask, 1);  // Core 1
     xTaskCreatePinnedToCore(DataTaskcode, "DataTask", 10000, NULL, 1, &DataTask, 0);  // Core 0
