@@ -3,6 +3,7 @@
 #include <SPIFFS.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <HTTPClient.h>
 #include <vector>
 #include <ArduinoJson.h>
 
@@ -21,6 +22,7 @@ volatile bool wifiConnected = false;
 volatile bool startWiFiConnect = false;
 String ssidInput = "";
 String passwordInput = "";
+const char* externalServerURL = "http://192.168.1.146:3001/api/s3/newRunFile";
 
 // --- Recording variables ---
 bool recording = false;
@@ -41,6 +43,102 @@ unsigned long blinkInterval = 500;
 // Task handles
 TaskHandle_t WiFiTask;
 TaskHandle_t DataTask;
+TaskHandle_t UploadTask;
+
+void uploadRunTask(void *pvParameter) {
+    Serial.println("[UPLOAD] Task started");
+
+    if (!SPIFFS.begin(true)) {
+        Serial.println("[UPLOAD] SPIFFS mount failed");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    File file = SPIFFS.open("/esp32run.json", "r");
+    if (!file) {
+        Serial.println("[UPLOAD] File not found");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    WiFiClient client;
+
+    // --- PARSE HOST AND PATH FROM URL ---
+    String url = externalServerURL;  // "http://192.168.1.146:3001/api/s3/newRunFile"
+    url.replace("http://", "");
+    int slashIndex = url.indexOf('/');
+    String host = url.substring(0, slashIndex);
+    String path = url.substring(slashIndex); 
+
+    int port = 80;
+    int colonIndex = host.indexOf(':');
+    if (colonIndex >= 0) {
+        port = host.substring(colonIndex + 1).toInt();
+        host = host.substring(0, colonIndex);
+    }
+
+    Serial.println("[UPLOAD] Connecting to " + host + ":" + port);
+
+    if (!client.connect(host.c_str(), port)) {
+        Serial.println("[UPLOAD] Connection failed");
+        file.close();
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // --- BUILD MULTIPART HEADER ---
+    String boundary = "----ESP32Boundary";
+    String head =
+        "--" + boundary + "\r\n"
+        "Content-Disposition: form-data; name=\"file\"; filename=\"esp32run.json\"\r\n"
+        "Content-Type: application/json\r\n\r\n";
+
+    String tail = "\r\n--" + boundary + "--\r\n";
+
+    size_t totalLen = head.length() + file.size() + tail.length();
+
+    // --- SEND HTTP HEADERS ---
+    client.print(String("POST ") + path + " HTTP/1.1\r\n");
+    client.print(String("Host: ") + host + "\r\n");
+    client.print("Content-Type: multipart/form-data; boundary=" + boundary + "\r\n");
+    client.print("Content-Length: " + String(totalLen) + "\r\n");
+    client.print("Connection: close\r\n\r\n");
+
+    // --- SEND MULTIPART BODY ---
+
+    // 1) Send multipart header
+    client.print(head);
+
+    // 2) Stream file content
+    uint8_t buf[1024];
+    while (file.available()) {
+        int r = file.read(buf, sizeof(buf));
+        client.write(buf, r);
+    }
+
+    // 3) Send multipart footer
+    client.print(tail);
+
+    file.close();
+
+    Serial.println("[UPLOAD] Upload complete. Waiting for server...");
+
+    // --- READ SERVER RESPONSE ---
+    String response = "";
+    while (client.connected() || client.available()) {
+        while (client.available()) {
+            char c = client.read();
+            response += c;
+        }
+    }
+
+    Serial.println("[UPLOAD] Server response:");
+    Serial.println(response);
+
+    client.stop();
+    vTaskDelete(NULL);
+}
+
 
 void setOnboardLed(int mode, unsigned long interval = 500) {
     currentLedMode = mode;
@@ -160,6 +258,12 @@ void WiFiTaskcode(void * pvParameter) {
         request->send(200, "application/json", json);
     });
 
+    server.on("/uploadRun", HTTP_POST, [](AsyncWebServerRequest *request){
+        Serial.println("[ENDPOINT] /uploadRun POST received");
+        xTaskCreate(uploadRunTask, "UploadTask", 12000, NULL, 1, &UploadTask);
+        request->send(200, "text/plain", "Upload started in background");
+    });
+
     server.begin();
 
     while (true) {
@@ -241,6 +345,7 @@ void setup() {
     // Start tasks on separate cores
     xTaskCreatePinnedToCore(WiFiTaskcode, "WiFiTask", 12000, NULL, 1, &WiFiTask, 1);  // Core 1
     xTaskCreatePinnedToCore(DataTaskcode, "DataTask", 10000, NULL, 1, &DataTask, 0);  // Core 0
+    // uploadRunTask(NULL); // For testing, run upload task once at startup
 }
 
 void loop() {
