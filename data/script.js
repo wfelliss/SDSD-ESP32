@@ -23,11 +23,18 @@ async function loadRuns() {
     }
 }
 
-function uploadRun(index) {
-    fetch(`/upload/${index}`, { method: 'POST' })
-        .then(res => alert(`Run ${index + 1} uploaded!`))
-        .catch(err => alert("Upload failed"));
-}
+document.getElementById('uploadBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('uploadStatus');
+    statusEl.textContent = "Uploading...";
+
+    try {
+        const response = await fetch('/uploadRun', { method: 'POST' });
+        if (response.ok) statusEl.textContent = "Upload successful!";
+        else statusEl.textContent = "Upload failed: " + response.status;
+    } catch (err) {
+        statusEl.textContent = "Upload failed: " + err.message;
+    }
+});
 
 // Load runs on page load
 loadRuns();
