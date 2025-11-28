@@ -6,14 +6,21 @@
 #include <HTTPClient.h>
 #include <vector>
 #include <ArduinoJson.h>
+#include <SD.h>
+#include <SPI.h>
+#include <DFRobot_BMI160.h>
+#include "Wire.h"
 
 
 // --- Pin definitions ---
 #define ONBOARD_LED_PIN 2
 #define RED_LED_PIN 25
-#define GREEN_LED_PIN 27
-#define BLUE_LED_PIN 26
+#define GREEN_LED_PIN 26
+#define BLUE_LED_PIN 27
 #define BUTTON_PIN 14
+#define SD_CS_PIN 5
+#define FRONT_SUS_PIN 34  // Analog pin for front suspension sensor
+#define REAR_SUS_PIN 35   // Analog pin for rear suspension sensor
 
 AsyncWebServer server(80);
 
@@ -28,6 +35,26 @@ const char* externalServerURL = "http://192.168.1.146:3001/api/s3/newRunFile";
 bool recording = false;
 std::vector<std::vector<int>> allRecordings;
 std::vector<int> currentRecording;
+
+// --- SD Card Variables ---
+struct SensorLine {
+    int acc[6];      // 6 accelerometer readings
+    int rear_sus;    // rear suspension
+    int front_sus;   // front suspension
+};
+
+String currentRunFilePath = "";
+std::vector<SensorLine> sensorBuffer;
+const size_t MAX_BUFFER_SIZE = 512;  // Adjust as needed
+unsigned long runStartTime = 0;
+
+// --- BMI160 Sensor ---
+DFRobot_BMI160 bmi160;
+const int8_t ic2_add = 0x68;
+struct IMUData {
+    int16_t values[6];   // 0-2 gyro, 3-5 accel
+    bool valid;          // true if sensor read OK
+};
 
 // --- Global Variables ---
 enum LedMode {
@@ -212,6 +239,72 @@ void setLedColor(uint8_t red, uint8_t green, uint8_t blue) {
     digitalWrite(BLUE_LED_PIN, blue ? HIGH : LOW);
 }
 
+void startNewRun() {
+    if (!SD.begin(SD_CS_PIN)) {
+        Serial.println("[ERROR] SD Card mount failed");
+        setLedColor(0, 0, 1); // Blue Failed
+        return;
+    }
+
+    unsigned long timestamp = millis();
+    currentRunFilePath = "/run_" + String(timestamp) + ".csv";
+
+    File file = SD.open(currentRunFilePath.c_str(), FILE_WRITE);
+    if (!file) {
+        Serial.println("[ERROR] Failed to create run file: " + currentRunFilePath);
+        setLedColor(0, 0, 1); // Blue Failed
+        return;
+    }
+
+    file.println("acc1,acc2,acc3,acc4,acc5,acc6,rear_sus,front_sus");
+    file.close();
+
+    sensorBuffer.clear();
+    runStartTime = millis();
+    Serial.println("[INFO] New run started: " + currentRunFilePath);
+}
+
+void flushSensorBuffer() {
+    if (sensorBuffer.empty() || currentRunFilePath == "") return;
+
+    File file = SD.open(currentRunFilePath.c_str(), FILE_APPEND);
+    if (!file) {
+        Serial.println("[ERROR] Failed to open run file for writing");
+        return;
+    }
+
+    for (const auto& line : sensorBuffer) {
+        for (int i = 0; i < 6; i++) {
+            file.print(line.acc[i]);
+            file.print(",");
+        }
+        file.print(line.rear_sus);
+        file.print(",");
+        file.println(line.front_sus);
+    }
+
+    file.close();
+    sensorBuffer.clear();
+    Serial.println("[INFO] Flushed 512 lines to SD card");
+}
+
+IMUData getAccelGyro() {
+    IMUData data;
+    data.valid = false;
+
+    int16_t raw[6] = {0};
+
+    int rslt = bmi160.getAccelGyroData(raw);
+
+    if (rslt == 0) {
+        for (int i = 0; i < 6; i++) {
+            data.values[i] = raw[i];
+        }
+        data.valid = true;
+    }
+
+    return data;
+}
 // WiFi Task - Core 1
 void WiFiTaskcode(void * pvParameter) {
     // Start AP
@@ -290,40 +383,61 @@ void DataTaskcode(void * pvParameter) {
     while (true) {
         int reading = digitalRead(BUTTON_PIN);
 
-        // Debounce logic
+        // Debounce
         if (reading != lastButtonState) lastDebounceTime = millis();
-
         if ((millis() - lastDebounceTime) > debounceDelay) {
             if (reading != buttonState) {
                 buttonState = reading;
-                if (buttonState == LOW) {  // Button pressed
-                    recording = !recording; // Toggle recording
+                if (buttonState == LOW) {
+                    recording = !recording;
 
                     if (recording) {
-                        // Start a new session
-                        currentRecording.clear();
-                        Serial.println("Recording started (new session)");
+                        setLedColor(1, 0, 0); // Red while recording
+                        // startNewRun(); Add back when SD card is ready
                     } else {
-                        // Stop recording, save session
-                        allRecordings.push_back(currentRecording);
-                        Serial.printf("Recording stopped, %d samples saved\n", currentRecording.size());
-                        Serial.printf("Total runs so far: %d\n", allRecordings.size());
+                        setLedColor(0, 1, 0); // Green when stopped
+                        // if (!sensorBuffer.empty()) flushSensorBuffer(); Add back when SD card is ready
+
                     }
                 }
             }
         }
         lastButtonState = reading;
 
-        // --- Data capture ---
+        // --- Capture data ---
         if (recording) {
-            int value = random(1, 101);  // Replace with actual data read
-            currentRecording.push_back(value);
-            setLedColor(1, 0, 0);  // Red while recording
-        } else {
-            setLedColor(0, 1, 0);  // Green when not recording
+            SensorLine line;
+            IMUData imuData = getAccelGyro();
+            if (imuData.valid) {
+                for (int i = 0; i < 3; i++) {
+                    line.acc[i] = imuData.values[i];   // gyro in deg/s (already deg/s)
+                }
+                for (int i = 3; i < 6; i++) {
+                    line.acc[i] = imuData.values[i] / 16384.0f; // Convert to g, keep as float
+                }
+
+            } else {
+                Serial.println("Failed to read IMU data");
+            }
+
+            line.rear_sus = analogRead(REAR_SUS_PIN);
+            line.front_sus = analogRead(FRONT_SUS_PIN);
+
+            //sensorBuffer.push_back(line);
+            Serial.println(
+                "Buffered IMU + Suspension | "
+                "Gyro: " + String(line.acc[0]) + "," + String(line.acc[1]) + "," + String(line.acc[2]) +
+                " Acc: " + String(line.acc[3]) + "," + String(line.acc[4]) + "," + String(line.acc[5]) +
+                " Rear: " + String(line.rear_sus) +
+                " Front: " + String(line.front_sus)
+            );
+
+            if (sensorBuffer.size() >= MAX_BUFFER_SIZE) {
+                // flushSensorBuffer(); Add back when SD card is ready
+            }
         }
 
-        vTaskDelay(10 / portTICK_PERIOD_MS);  // sample rate
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
 
@@ -335,6 +449,16 @@ void setup() {
 
     if (!SPIFFS.begin(true)) {
         Serial.println("Failed to mount SPIFFS");
+        setLedColor(0, 0, 1); // Blue Failed
+        while(true) delay(1000); // halt here
+    }
+    if(bmi160.softReset() != BMI160_OK){
+        Serial.println("BMI160 reset failed");
+        setLedColor(0, 0, 1); // Blue Failed
+        while(true) delay(1000); // halt here
+    }
+    if(bmi160.I2cInit(ic2_add) != BMI160_OK){
+        Serial.println("BMI160 I2C init failed");
         setLedColor(0, 0, 1); // Blue Failed
         while(true) delay(1000); // halt here
     }
