@@ -81,21 +81,35 @@ void uploadRunTask(void *pvParameter) {
         return;
     }
 
-    File file = SPIFFS.open("/esp32run.json", "r");
-    if (!file) {
-        Serial.println("[UPLOAD] File not found");
+    if (!SD.begin()) {
+        Serial.println("[UPLOAD] SD mount failed");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    File jsonFile = SPIFFS.open("/esp32run.json", "r"); // Change this to be loaded from user inputs
+    if (!jsonFile) {
+        Serial.println("[UPLOAD] JSON file not found");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    File csvFile = SD.open("/run.csv", "r");   // CHANGE NAME IF NEEDED
+    if (!csvFile) {
+        Serial.println("[UPLOAD] CSV file not found");
+        jsonFile.close();
         vTaskDelete(NULL);
         return;
     }
 
     WiFiClient client;
 
-    // --- PARSE HOST AND PATH FROM URL ---
-    String url = externalServerURL;  // "http://192.168.1.146:3001/api/s3/newRunFile"
+    // Parse host + path from your URL
+    String url = externalServerURL;  
     url.replace("http://", "");
     int slashIndex = url.indexOf('/');
     String host = url.substring(0, slashIndex);
-    String path = url.substring(slashIndex); 
+    String path = url.substring(slashIndex);
 
     int port = 80;
     int colonIndex = host.indexOf(':');
@@ -108,54 +122,71 @@ void uploadRunTask(void *pvParameter) {
 
     if (!client.connect(host.c_str(), port)) {
         Serial.println("[UPLOAD] Connection failed");
-        file.close();
+        jsonFile.close();
+        csvFile.close();
         vTaskDelete(NULL);
         return;
     }
 
-    // --- BUILD MULTIPART HEADER ---
+    // Boundary
     String boundary = "----ESP32Boundary";
-    String head =
+
+    // Part headers
+    String jsonHead =
         "--" + boundary + "\r\n"
-        "Content-Disposition: form-data; name=\"file\"; filename=\"esp32run.json\"\r\n"
+        "Content-Disposition: form-data; name=\"metadata\"; filename=\"esp32run.json\"\r\n"
         "Content-Type: application/json\r\n\r\n";
+
+    String csvHead =
+        "\r\n--" + boundary + "\r\n"
+        "Content-Disposition: form-data; name=\"csv\"; filename=\"run.csv\"\r\n"
+        "Content-Type: text/csv\r\n\r\n";
 
     String tail = "\r\n--" + boundary + "--\r\n";
 
-    size_t totalLen = head.length() + file.size() + tail.length();
+    // Total length
+    size_t totalLen =
+        jsonHead.length() +
+        jsonFile.size() +
+        csvHead.length() +
+        csvFile.size() +
+        tail.length();
 
-    // --- SEND HTTP HEADERS ---
+    // Send HTTP headers
     client.print(String("POST ") + path + " HTTP/1.1\r\n");
-    client.print(String("Host: ") + host + "\r\n");
+    client.print("Host: " + host + "\r\n");
     client.print("Content-Type: multipart/form-data; boundary=" + boundary + "\r\n");
     client.print("Content-Length: " + String(totalLen) + "\r\n");
     client.print("Connection: close\r\n\r\n");
 
-    // --- SEND MULTIPART BODY ---
-
-    // 1) Send multipart header
-    client.print(head);
-
-    // 2) Stream file content
+    // Write JSON part
+    client.print(jsonHead);
     uint8_t buf[1024];
-    while (file.available()) {
-        int r = file.read(buf, sizeof(buf));
+    while (jsonFile.available()) {
+        int r = jsonFile.read(buf, sizeof(buf));
         client.write(buf, r);
     }
 
-    // 3) Send multipart footer
+    // Write CSV part (STREAMED)
+    client.print(csvHead);
+    while (csvFile.available()) {
+        int r = csvFile.read(buf, sizeof(buf));
+        client.write(buf, r);
+    }
+
+    // Footer
     client.print(tail);
 
-    file.close();
+    csvFile.close();
+    jsonFile.close();
 
     Serial.println("[UPLOAD] Upload complete. Waiting for server...");
 
-    // --- READ SERVER RESPONSE ---
+    // Read server reply
     String response = "";
     while (client.connected() || client.available()) {
         while (client.available()) {
-            char c = client.read();
-            response += c;
+            response += (char)client.read();
         }
     }
 
