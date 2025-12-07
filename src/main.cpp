@@ -29,7 +29,7 @@ volatile bool wifiConnected = false;
 volatile bool startWiFiConnect = false;
 String ssidInput = "";
 String passwordInput = "";
-const char* externalServerURL = "http://192.168.1.146:3001/api/s3/newRunFile";
+const char* externalServerURL = "http://192.168.1.181:3001/api/s3/newRunFile";
 
 // --- Recording variables ---
 bool recording = false;
@@ -75,42 +75,38 @@ TaskHandle_t UploadTask;
 void uploadRunTask(void *pvParameter) {
     Serial.println("[UPLOAD] Task started");
 
-    if (!SPIFFS.begin(true)) {
-        Serial.println("[UPLOAD] SPIFFS mount failed");
+    char *runNameC = (char *)pvParameter;
+    String csvPath = "/run.csv"; 
+    if (runNameC != NULL) {
+        csvPath = String(runNameC);
+        free(runNameC);
+    }
+
+    if (!SPIFFS.begin(true) || !SD.begin(SD_CS_PIN)) {
+        Serial.println("[UPLOAD] Storage mount failed");
         vTaskDelete(NULL);
         return;
     }
 
-    if (!SD.begin()) {
-        Serial.println("[UPLOAD] SD mount failed");
-        vTaskDelete(NULL);
-        return;
-    }
+    File jsonFile = SPIFFS.open("/metadata.json", "r");
+    File csvFile = SD.open(("/" + csvPath).c_str(), "r");
 
-    File jsonFile = SPIFFS.open("/esp32run.json", "r"); // Change this to be loaded from user inputs
-    if (!jsonFile) {
-        Serial.println("[UPLOAD] JSON file not found");
-        vTaskDelete(NULL);
-        return;
-    }
-
-    File csvFile = SD.open("/run.csv", "r");   // CHANGE NAME IF NEEDED
-    if (!csvFile) {
-        Serial.println("[UPLOAD] CSV file not found");
-        jsonFile.close();
+    if (!jsonFile || !csvFile) {
+        Serial.println("[UPLOAD] File not found");
+        if(jsonFile) jsonFile.close();
+        if(csvFile) csvFile.close();
         vTaskDelete(NULL);
         return;
     }
 
     WiFiClient client;
-
-    // Parse host + path from your URL
-    String url = externalServerURL;  
+    
+    // --- 1. URL Parsing ---
+    String url = externalServerURL;
     url.replace("http://", "");
     int slashIndex = url.indexOf('/');
     String host = url.substring(0, slashIndex);
     String path = url.substring(slashIndex);
-
     int port = 80;
     int colonIndex = host.indexOf(':');
     if (colonIndex >= 0) {
@@ -118,7 +114,7 @@ void uploadRunTask(void *pvParameter) {
         host = host.substring(0, colonIndex);
     }
 
-    Serial.println("[UPLOAD] Connecting to " + host + ":" + port);
+    Serial.println("[UPLOAD] Connecting to " + host + ":" + String(port));
 
     if (!client.connect(host.c_str(), port)) {
         Serial.println("[UPLOAD] Connection failed");
@@ -127,76 +123,101 @@ void uploadRunTask(void *pvParameter) {
         vTaskDelete(NULL);
         return;
     }
+    
+    // Increased timeout prevents read failures on large files
+    client.setTimeout(10); 
 
-    // Boundary
-    String boundary = "----ESP32Boundary";
+    String boundary = "----ESP32Boundary" + String(millis());
 
-    // Part headers
-    String jsonHead =
-        "--" + boundary + "\r\n"
-        "Content-Disposition: form-data; name=\"metadata\"; filename=\"esp32run.json\"\r\n"
-        "Content-Type: application/json\r\n\r\n";
+    // --- 2. PREPARE METADATA (FIXED) ---
+    // We read the file into a String so we can send it as a FORM FIELD, not a file.
+    // This satisfies @Body('metadata') on the server.
+    String jsonString = "";
+    while (jsonFile.available()) {
+        jsonString += (char)jsonFile.read();
+    }
+    jsonFile.close(); // Done with this file
 
-    String csvHead =
-        "\r\n--" + boundary + "\r\n"
-        "Content-Disposition: form-data; name=\"csv\"; filename=\"run.csv\"\r\n"
+    // Header for the Metadata Field
+    // Notice: NO 'filename=' and NO 'Content-Type'. This makes it a text field.
+    String jsonPart = 
+        "--" + boundary + "\r\n" +
+        "Content-Disposition: form-data; name=\"metadata\"\r\n\r\n" + 
+        jsonString + "\r\n";
+
+    // --- 3. PREPARE CSV HEADER (FIXED) ---
+    String csvFileName = csvPath;
+    int lastSlash = csvFileName.lastIndexOf('/');
+    if (lastSlash >= 0) csvFileName = csvFileName.substring(lastSlash + 1);
+
+    // Header for the CSV File
+    // Notice: name="file" matches @UseInterceptors(FileInterceptor('file'))
+    String csvHead = 
+        "--" + boundary + "\r\n" +
+        "Content-Disposition: form-data; name=\"file\"; filename=\"" + csvFileName + "\"\r\n" +
         "Content-Type: text/csv\r\n\r\n";
 
     String tail = "\r\n--" + boundary + "--\r\n";
 
-    // Total length
-    size_t totalLen =
-        jsonHead.length() +
-        jsonFile.size() +
-        csvHead.length() +
-        csvFile.size() +
-        tail.length();
+    // Calculate exact length
+    size_t totalLen = jsonPart.length() + csvHead.length() + csvFile.size() + tail.length();
 
-    // Send HTTP headers
-    client.print(String("POST ") + path + " HTTP/1.1\r\n");
-    client.print("Host: " + host + "\r\n");
+    Serial.printf("[UPLOAD] Sending %u bytes to %s\n", totalLen, path.c_str());
+
+    // --- 4. SEND HTTP REQUEST ---
+    client.print("POST " + path + " HTTP/1.1\r\n");
+    client.print("Host: " + host + ":" + String(port) + "\r\n");
     client.print("Content-Type: multipart/form-data; boundary=" + boundary + "\r\n");
     client.print("Content-Length: " + String(totalLen) + "\r\n");
     client.print("Connection: close\r\n\r\n");
 
-    // Write JSON part
-    client.print(jsonHead);
-    uint8_t buf[1024];
-    while (jsonFile.available()) {
-        int r = jsonFile.read(buf, sizeof(buf));
-        client.write(buf, r);
-    }
-
-    // Write CSV part (STREAMED)
+    // Send Metadata (Field)
+    client.print(jsonPart);
+    
+    // Send CSV (File)
     client.print(csvHead);
+
+    // Stream CSV Data from SD Card
+    uint8_t buf[1024];
+    size_t totalCsvSent = 0;
     while (csvFile.available()) {
         int r = csvFile.read(buf, sizeof(buf));
-        client.write(buf, r);
-    }
-
-    // Footer
-    client.print(tail);
-
-    csvFile.close();
-    jsonFile.close();
-
-    Serial.println("[UPLOAD] Upload complete. Waiting for server...");
-
-    // Read server reply
-    String response = "";
-    while (client.connected() || client.available()) {
-        while (client.available()) {
-            response += (char)client.read();
+        if (r <= 0) break;
+        
+        size_t written = client.write(buf, r);
+        if (written != r) {
+            Serial.println("[UPLOAD] Network write failed!");
+            break;
         }
+        totalCsvSent += written;
+        
+        // Blink LED or print minimal progress
+        if (totalCsvSent % 8192 == 0) Serial.print("."); 
+    }
+    
+    client.print(tail);
+    csvFile.close();
+
+    Serial.println("\n[UPLOAD] Upload finished. Waiting for server...");
+
+    // --- 5. READ RESPONSE ---
+    String response = "";
+    unsigned long timeout = millis();
+    while (client.connected() || client.available()) {
+        if (client.available()) {
+            response += (char)client.read();
+            timeout = millis();
+        }
+        // 5 second read timeout
+        if (millis() - timeout > 5000) break; 
     }
 
-    Serial.println("[UPLOAD] Server response:");
+    Serial.println("[UPLOAD] Server Response:");
     Serial.println(response);
 
     client.stop();
     vTaskDelete(NULL);
 }
-
 
 void setOnboardLed(int mode, unsigned long interval = 500) {
     currentLedMode = mode;
@@ -367,15 +388,30 @@ void WiFiTaskcode(void * pvParameter) {
     });
 
     server.on("/runs", HTTP_GET, [](AsyncWebServerRequest *request) {
-        DynamicJsonDocument doc(1024);
+        if (!SD.begin(SD_CS_PIN)) {
+            request->send(500, "application/json", "{\"error\":\"SD Card mount failed\"}");
+            return;
+        }
+
+        DynamicJsonDocument doc(2048);
         JsonArray runsArray = doc.to<JsonArray>();
 
-        for (size_t i = 0; i < allRecordings.size(); i++) {
-            JsonArray runArray = runsArray.createNestedArray();
-            for (size_t j = 0; j < allRecordings[i].size(); j++) {
-                runArray.add(allRecordings[i][j]);
+        File root = SD.open("/");
+        File file = root.openNextFile();
+
+        while (file) {
+            if (!file.isDirectory()) {
+                String fileName = String(file.name());
+                size_t fileSize = file.size();
+                
+                JsonObject fileObj = runsArray.createNestedObject();
+                fileObj["name"] = fileName;
+                fileObj["size"] = fileSize;
             }
+            file = root.openNextFile();
         }
+
+        root.close();
 
         String json;
         serializeJson(doc, json);
@@ -384,7 +420,35 @@ void WiFiTaskcode(void * pvParameter) {
 
     server.on("/uploadRun", HTTP_POST, [](AsyncWebServerRequest *request){
         Serial.println("[ENDPOINT] /uploadRun POST received");
-        xTaskCreate(uploadRunTask, "UploadTask", 12000, NULL, 1, &UploadTask);
+
+        String runName = "";
+        // First check POST form body
+        if (request->hasParam("run", true)) {
+            runName = request->getParam("run", true)->value();
+        } else if (request->hasParam("run")) {
+            // fallback to query param
+            runName = request->getParam("run")->value();
+        }
+
+        if (runName.length() == 0) {
+            request->send(400, "text/plain", "Missing 'run' parameter");
+            return;
+        }
+
+        // Duplicate string to heap for task parameter
+        char *param = strdup(runName.c_str());
+        if (!param) {
+            request->send(500, "text/plain", "Memory allocation failed");
+            return;
+        }
+
+        BaseType_t res = xTaskCreate(uploadRunTask, "UploadTask", 12000, param, 1, &UploadTask);
+        if (res != pdPASS) {
+            free(param);
+            request->send(500, "text/plain", "Failed to create upload task");
+            return;
+        }
+
         request->send(200, "text/plain", "Upload started in background");
     });
 
