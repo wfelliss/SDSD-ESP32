@@ -1,16 +1,19 @@
+let runsList = [];
+
 async function loadRuns() {
     try {
         const response = await fetch('/runs');
         const runs = await response.json();
+        runsList = runs || [];
         const container = document.getElementById('runsContainer');
-        
-        if (runs.length === 0) {
+
+        if (!runsList || runsList.length === 0) {
             container.innerHTML = "<p>No runs recorded yet.</p>";
         } else {
             let html = "<ul>";
-            runs.forEach((run, index) => {
+            runsList.forEach((run, index) => {
                 html += `<li>
-                            <span>Run ${index + 1} (${run.length} samples)</span>
+                            <span>${run.name} (${run.size} bytes)</span>
                             <button onclick="uploadRun(${index})">Upload</button>
                          </li>`;
             });
@@ -23,18 +26,28 @@ async function loadRuns() {
     }
 }
 
-document.getElementById('uploadBtn').addEventListener('click', async () => {
+async function uploadRun(index) {
     const statusEl = document.getElementById('uploadStatus');
-    statusEl.textContent = "Uploading...";
+    if (!runsList || !runsList[index]) {
+        statusEl.textContent = "Invalid run selected";
+        return;
+    }
+    const runName = runsList[index].name;
+    statusEl.textContent = `Uploading ${runName}...`;
 
     try {
-        const response = await fetch('/uploadRun', { method: 'POST' });
-        if (response.ok) statusEl.textContent = "Upload successful!";
+        const body = 'run=' + encodeURIComponent(runName);
+        const response = await fetch('/uploadRun', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        });
+        if (response.ok) statusEl.textContent = "Upload started";
         else statusEl.textContent = "Upload failed: " + response.status;
     } catch (err) {
         statusEl.textContent = "Upload failed: " + err.message;
     }
-});
+}
 
 // Load runs on page load
 loadRuns();
