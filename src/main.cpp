@@ -407,6 +407,7 @@ void WiFiTaskcode(void * pvParameter) {
                 JsonObject fileObj = runsArray.createNestedObject();
                 fileObj["name"] = fileName;
                 fileObj["size"] = fileSize;
+                Serial.println("Found file: " + fileName + " (" + String(fileSize) + " bytes)");
             }
             file = root.openNextFile();
         }
