@@ -1,0 +1,9 @@
+{
+  "run_name": "ESP32 Test Upload",
+  "run_comment": "Checking if i can upload files from the esp32 to the webservice correctly.",
+  "run_time": 2184,
+  "sample_frequency": {
+    "rear_sus": "100",
+    "front_sus": "100"
+  }
+}
