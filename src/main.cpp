@@ -49,12 +49,12 @@ const size_t MAX_BUFFER_SIZE = 512;  // Adjust as needed
 unsigned long runStartTime = 0;
 
 // --- BMI160 Sensor ---
-DFRobot_BMI160 bmi160;
-const int8_t ic2_add = 0x68;
-struct IMUData {
-    int16_t values[6];   // 0-2 gyro, 3-5 accel
-    bool valid;          // true if sensor read OK
-};
+// DFRobot_BMI160 bmi160;
+// const int8_t ic2_add = 0x68;
+// struct IMUData {
+//     int16_t values[6];   // 0-2 gyro, 3-5 accel
+//     bool valid;          // true if sensor read OK
+// };
 
 // --- Global Variables ---
 enum LedMode {
@@ -336,27 +336,27 @@ void flushSensorBuffer() {
     }
 
     file.close();
+    Serial.printf("[INFO] Flushed %u lines to SD card\n", (unsigned)sensorBuffer.size());
     sensorBuffer.clear();
-    Serial.println("[INFO] Flushed 512 lines to SD card");
 }
 
-IMUData getAccelGyro() {
-    IMUData data;
-    data.valid = false;
+// IMUData getAccelGyro() {
+//     IMUData data;
+//     data.valid = false;
 
-    int16_t raw[6] = {0};
+//     int16_t raw[6] = {0};
 
-    int rslt = bmi160.getAccelGyroData(raw);
+//     int rslt = bmi160.getAccelGyroData(raw);
 
-    if (rslt == 0) {
-        for (int i = 0; i < 6; i++) {
-            data.values[i] = raw[i];
-        }
-        data.valid = true;
-    }
+//     if (rslt == 0) {
+//         for (int i = 0; i < 6; i++) {
+//             data.values[i] = raw[i];
+//         }
+//         data.valid = true;
+//     }
 
-    return data;
-}
+//     return data;
+// }
 // WiFi Task - Core 1
 void WiFiTaskcode(void * pvParameter) {
     // Start AP
@@ -573,23 +573,23 @@ void setup() {
     Serial.begin(115200);
 
     setupPins();
-    setLedColor(1, 0, 1);  // Purple while setting up
+    setLedColor(1, 1, 1);  // Purple while setting up
 
     if (!SPIFFS.begin(true)) {
         Serial.println("Failed to mount SPIFFS");
         setLedColor(0, 0, 1); // Blue Failed
         while(true) delay(1000); // halt here
     }
-    if(bmi160.softReset() != BMI160_OK){
-        Serial.println("BMI160 reset failed");
-        setLedColor(0, 0, 1); // Blue Failed
-        while(true) delay(1000); // halt here
-    }
-    if(bmi160.I2cInit(ic2_add) != BMI160_OK){
-        Serial.println("BMI160 I2C init failed");
-        setLedColor(0, 0, 1); // Blue Failed
-        while(true) delay(1000); // halt here
-    }
+    // if(bmi160.softReset() != BMI160_OK){
+    //     Serial.println("BMI160 reset failed");
+    //     setLedColor(0, 0, 1); // Blue Failed
+    //     while(true) delay(1000); // halt here
+    // }
+    // if(bmi160.I2cInit(ic2_add) != BMI160_OK){
+    //     Serial.println("BMI160 I2C init failed");
+    //     setLedColor(0, 0, 1); // Blue Failed
+    //     while(true) delay(1000); // halt here
+    // }
 
     server.serveStatic("/style.css", SPIFFS, "/style.css");
     server.serveStatic("/script.js", SPIFFS, "/script.js");
@@ -597,7 +597,8 @@ void setup() {
     // Start tasks on separate cores
     xTaskCreatePinnedToCore(WiFiTaskcode, "WiFiTask", 12000, NULL, 1, &WiFiTask, 1);  // Core 1
     xTaskCreatePinnedToCore(DataTaskcode, "DataTask", 10000, NULL, 1, &DataTask, 0);  // Core 0
-    // uploadRunTask(NULL); // For testing, run upload task once at startup
+
+    setLedColor(0, 1, 0);  // Green ready
 }
 
 void loop() {
