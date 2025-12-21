@@ -194,6 +194,21 @@ void uploadRunTask(void *pvParameter) {
     Serial.println("[UPLOAD] Server Response:");
     Serial.println(response);
 
+    if (response.indexOf("HTTP/1.1 200") >= 0 || response.indexOf("HTTP/1.1 201") >= 0) {
+        Serial.println("[UPLOAD] Success detected. Deleting local files...");
+
+        // Delete CSV from SD card
+        // Note: Using the same path logic as your SD.open call
+        String fullCsvPath = (csvPath.startsWith("/") ? csvPath : "/" + csvPath);
+        if (SD.remove(fullCsvPath.c_str())) {
+            Serial.println("[UPLOAD] SD file deleted.");
+        } else {
+            Serial.println("[UPLOAD] Failed to delete SD file.");
+        }
+    } else {
+        Serial.println("[UPLOAD] Upload failed or returned error. Keeping files for retry.");
+    }
+
     client.stop();
     vTaskDelete(NULL);
 }
