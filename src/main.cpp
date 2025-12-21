@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <AsyncTCP.h>
@@ -73,7 +74,7 @@ TaskHandle_t DataTask;
 TaskHandle_t UploadTask;
 
 void uploadRunTask(void *pvParameter) {
-    Serial.println("[UPLOAD] Task started");
+    Serial.println("[UPLOAD] Task started (using SPIFFS)");
 
     char *runNameC = (char *)pvParameter;
     String csvPath = "/run.csv"; 
@@ -82,125 +83,104 @@ void uploadRunTask(void *pvParameter) {
         free(runNameC);
     }
 
+    // --- 1. Mount SPIFFS (true = format if mount fails) ---
     if (!SPIFFS.begin(true) || !SD.begin(SD_CS_PIN)) {
-        Serial.println("[UPLOAD] Storage mount failed");
+        Serial.println("[UPLOAD] Storage mount failed (SPIFFS or SD)");
         vTaskDelete(NULL);
         return;
     }
 
+    // --- 2. Open Files ---
     File jsonFile = SPIFFS.open("/metadata.json", "r");
     File csvFile = SD.open(("/" + csvPath).c_str(), "r");
 
     if (!jsonFile || !csvFile) {
-        Serial.println("[UPLOAD] File not found");
+        Serial.println("[UPLOAD] File not found in SPIFFS or SD");
         if(jsonFile) jsonFile.close();
         if(csvFile) csvFile.close();
         vTaskDelete(NULL);
         return;
     }
 
-    WiFiClient client;
+    // --- 3. Setup Secure Client ---
+    WiFiClientSecure client;
+    client.setInsecure(); // Required for Railway's SSL certificates
     
-    // --- 1. URL Parsing ---
+    // Parse URL for Host/Path
     String url = externalServerURL;
+    url.replace("https://", "");
     url.replace("http://", "");
+    
     int slashIndex = url.indexOf('/');
     String host = url.substring(0, slashIndex);
     String path = url.substring(slashIndex);
-    int port = 80;
-    int colonIndex = host.indexOf(':');
-    if (colonIndex >= 0) {
-        port = host.substring(colonIndex + 1).toInt();
-        host = host.substring(0, colonIndex);
-    }
-
-    Serial.println("[UPLOAD] Connecting to " + host + ":" + String(port));
+    
+    int port = 443; // Always 443 for Railway HTTPS
+    
+    Serial.println("[UPLOAD] Connecting to: " + host + " (Port 443)");
 
     if (!client.connect(host.c_str(), port)) {
-        Serial.println("[UPLOAD] Connection failed");
+        Serial.println("[UPLOAD] HTTPS Connection failed");
         jsonFile.close();
         csvFile.close();
         vTaskDelete(NULL);
         return;
     }
     
-    // Increased timeout prevents read failures on large files
-    client.setTimeout(10); 
+    client.setTimeout(15); 
 
+    // --- 4. Build Multipart Body ---
     String boundary = "----ESP32Boundary" + String(millis());
 
-    // --- 2. PREPARE METADATA (FIXED) ---
-    // We read the file into a String so we can send it as a FORM FIELD, not a file.
-    // This satisfies @Body('metadata') on the server.
+    // Read JSON Metadata from SPIFFS
     String jsonString = "";
     while (jsonFile.available()) {
         jsonString += (char)jsonFile.read();
     }
-    jsonFile.close(); // Done with this file
+    jsonFile.close(); 
 
-    // Header for the Metadata Field
-    // Notice: NO 'filename=' and NO 'Content-Type'. This makes it a text field.
     String jsonPart = 
         "--" + boundary + "\r\n" +
         "Content-Disposition: form-data; name=\"metadata\"\r\n\r\n" + 
         jsonString + "\r\n";
 
-    // --- 3. PREPARE CSV HEADER (FIXED) ---
     String csvFileName = csvPath;
-    int lastSlash = csvFileName.lastIndexOf('/');
-    if (lastSlash >= 0) csvFileName = csvFileName.substring(lastSlash + 1);
+    if (csvFileName.lastIndexOf('/') >= 0) {
+        csvFileName = csvFileName.substring(csvFileName.lastIndexOf('/') + 1);
+    }
 
-    // Header for the CSV File
-    // Notice: name="file" matches @UseInterceptors(FileInterceptor('file'))
     String csvHead = 
         "--" + boundary + "\r\n" +
         "Content-Disposition: form-data; name=\"file\"; filename=\"" + csvFileName + "\"\r\n" +
         "Content-Type: text/csv\r\n\r\n";
 
     String tail = "\r\n--" + boundary + "--\r\n";
-
-    // Calculate exact length
     size_t totalLen = jsonPart.length() + csvHead.length() + csvFile.size() + tail.length();
 
-    Serial.printf("[UPLOAD] Sending %u bytes to %s\n", totalLen, path.c_str());
-
-    // --- 4. SEND HTTP REQUEST ---
+    // --- 5. Send POST Request ---
     client.print("POST " + path + " HTTP/1.1\r\n");
-    client.print("Host: " + host + ":" + String(port) + "\r\n");
+    client.print("Host: " + host + "\r\n"); // Railway needs this header!
     client.print("Content-Type: multipart/form-data; boundary=" + boundary + "\r\n");
     client.print("Content-Length: " + String(totalLen) + "\r\n");
     client.print("Connection: close\r\n\r\n");
 
-    // Send Metadata (Field)
     client.print(jsonPart);
-    
-    // Send CSV (File)
     client.print(csvHead);
 
     // Stream CSV Data from SD Card
     uint8_t buf[1024];
-    size_t totalCsvSent = 0;
     while (csvFile.available()) {
         int r = csvFile.read(buf, sizeof(buf));
         if (r <= 0) break;
-        
-        size_t written = client.write(buf, r);
-        if (written != r) {
-            Serial.println("[UPLOAD] Network write failed!");
-            break;
-        }
-        totalCsvSent += written;
-        
-        // Blink LED or print minimal progress
-        if (totalCsvSent % 8192 == 0) Serial.print("."); 
+        client.write(buf, r);
     }
     
     client.print(tail);
     csvFile.close();
 
-    Serial.println("\n[UPLOAD] Upload finished. Waiting for server...");
+    Serial.println("[UPLOAD] Data sent. Reading response...");
 
-    // --- 5. READ RESPONSE ---
+    // --- 6. Read Response ---
     String response = "";
     unsigned long timeout = millis();
     while (client.connected() || client.available()) {
@@ -208,7 +188,6 @@ void uploadRunTask(void *pvParameter) {
             response += (char)client.read();
             timeout = millis();
         }
-        // 5 second read timeout
         if (millis() - timeout > 5000) break; 
     }
 
@@ -586,6 +565,11 @@ void setup() {
         Serial.println("Failed to mount SPIFFS");
         setLedColor(0, 0, 1); // Blue Failed
         while(true) delay(1000); // halt here
+    }
+    if (!SD.begin(SD_CS_PIN)) {
+        Serial.println("[ERROR] SD Card mount failed");
+        setLedColor(0, 0, 1); // Blue Failed
+        return;
     }
     // if(bmi160.softReset() != BMI160_OK){
     //     Serial.println("BMI160 reset failed");
