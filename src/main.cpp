@@ -8,7 +8,6 @@
 #include <ArduinoJson.h>
 #include <SD.h>
 #include <SPI.h>
-#include <DFRobot_BMI160.h>
 #include "Wire.h"
 
 
@@ -29,7 +28,8 @@ volatile bool wifiConnected = false;
 volatile bool startWiFiConnect = false;
 String ssidInput = "";
 String passwordInput = "";
-const char* externalServerURL = "http://192.168.1.181:3001/api/s3/newRunFile";
+// const char* externalServerURL = "http://192.168.1.181:3001/api/s3/newRunFile";
+const char* externalServerURL = "https://backend-production-68e1.up.railway.app/api/s3/newRunFile";
 
 // --- Recording variables ---
 bool recording = false;
@@ -365,6 +365,13 @@ void WiFiTaskcode(void * pvParameter) {
     setOnboardLed(LED_BLINK, 1000);  // Start blinking once
 
     // Setup async server
+    server.onNotFound([](AsyncWebServerRequest *request){
+    Serial.printf("NOT_FOUND: %s\n", request->url().c_str());
+    
+    // Option A: Redirect them to the main page (Best for Captive Portals)
+    request->redirect("/");
+    });
+
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (wifiConnected) request->redirect("/connected");
         else request->send(SPIFFS, "/index.html", "text/html");
