@@ -158,7 +158,6 @@ void uploadRunTask(void *pvParameter) {
     // --- 4. Build Multipart Body ---
     String boundary = "----ESP32Boundary" + String(millis());
 
-    // Build metadata JSON dynamically since metadata.json has been removed.
     // Count data lines in CSV (subtract header) to estimate run time.
     size_t newlineCount = 0;
     while (csvFile.available()) {
@@ -188,8 +187,8 @@ void uploadRunTask(void *pvParameter) {
     }
 
     metaDoc["run_name"] = csvFileName;
-    metaDoc["run_comment"] = comments;
-    metaDoc["location"] = trackName;
+    metaDoc["run_comment"] = (comments.length() == 0) ? "NULL" : comments;
+    metaDoc["location"] = (trackName.length() == 0) ? "NULL" : trackName;
     metaDoc["run_time"] = run_time_ms;
     JsonObject sf = metaDoc.createNestedObject("sample_frequency");
     sf["rear_sus"] = String(SAMPLE_FREQUENCY);
