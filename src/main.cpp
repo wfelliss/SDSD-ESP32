@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <ESPmDNS.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <AsyncTCP.h>
@@ -323,6 +324,13 @@ void connectToWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println("\nConnected!");
         Serial.println(WiFi.localIP());
+
+        if (!MDNS.begin("esp32")) {  // esp32.local
+            Serial.println("Error starting mDNS responder");
+        } else {
+            Serial.println("mDNS responder started at esp32.local");
+        }
+
         wifiConnected = true;
         WiFi.softAPdisconnect(true);
         setOnboardLed(LED_SOLID);
@@ -422,6 +430,11 @@ void WiFiTaskcode(void * pvParameter) {
     // Start AP
     WiFi.softAP("SD Squared Telemetry", "sdsquared");
     Serial.println("AP Started. Connect to WiFi 'SD Squared Telemetry' to configure");
+    if (!MDNS.begin("esp32-ap")) {  // devices on the SoftAP can use esp32-ap.local
+        Serial.println("Error starting mDNS responder on SoftAP");
+    } else {
+        Serial.println("mDNS responder started on SoftAP as esp32-ap.local");
+    }
     setOnboardLed(LED_BLINK, 1000);  // Start blinking once
 
     // Setup async server
