@@ -179,13 +179,17 @@ void uploadRunTask(void *pvParameter) {
 
     DynamicJsonDocument metaDoc(2048);
     String csvFileName = csvPath;
-    if (csvFileName.lastIndexOf('/') >= 0) {
+    if (csvFileName.lastIndexOf('/') >= 0) { // extracts filename from path
         csvFileName = csvFileName.substring(csvFileName.lastIndexOf('/') + 1);
+    }
+    int dotIndex = csvFileName.lastIndexOf('.');
+    if (dotIndex > 0) { // remove extension
+        csvFileName = csvFileName.substring(0, dotIndex);
     }
 
     metaDoc["run_name"] = csvFileName;
     metaDoc["run_comment"] = comments;
-    metaDoc["run_location"] = trackName;
+    metaDoc["location"] = trackName;
     metaDoc["run_time"] = run_time_ms;
     JsonObject sf = metaDoc.createNestedObject("sample_frequency");
     sf["rear_sus"] = String(SAMPLE_FREQUENCY);
@@ -248,7 +252,6 @@ void uploadRunTask(void *pvParameter) {
         Serial.println("[UPLOAD] Success detected. Deleting local files...");
 
         // Delete CSV from SD card
-        // Note: Using the same path logic as your SD.open call
         String fullCsvPath = (csvPath.startsWith("/") ? csvPath : "/" + csvPath);
         if (SD.remove(fullCsvPath.c_str())) {
             Serial.println("[UPLOAD] SD file deleted.");
