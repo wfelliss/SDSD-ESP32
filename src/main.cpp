@@ -234,15 +234,29 @@ void uploadRunTask(void *pvParameter) {
 
     Serial.println("[UPLOAD] Data sent. Reading response...");
 
+    // Ensure outgoing data is flushed from TCP buffers
+    client.flush();
+
     // --- 6. Read Response ---
     String response = "";
-    unsigned long timeout = millis();
-    while (client.connected() || client.available()) {
-        if (client.available()) {
-            response += (char)client.read();
-            timeout = millis();
+    unsigned long lastReceive = millis();
+    const unsigned long overallTimeoutMs = 15000; // wait up to 15s for server response
+
+    // Wait for initial data with a short poll loop (keeps WiFi stack responsive)
+    while (!client.available() && client.connected() && (millis() - lastReceive) < overallTimeoutMs) {
+        delay(10);
+    }
+
+    // Read until the server closes the connection or we hit the overall timeout
+    lastReceive = millis();
+    while ((client.connected() || client.available()) && (millis() - lastReceive) < overallTimeoutMs) {
+        while (client.available()) {
+            char c = (char)client.read();
+            response += c;
+            lastReceive = millis();
         }
-        if (millis() - timeout > 5000) break; 
+        // small delay to yield
+        delay(10);
     }
 
     Serial.println("[UPLOAD] Server Response:");
