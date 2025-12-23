@@ -49,6 +49,10 @@ std::vector<SensorLine> sensorBuffer;
 const size_t MAX_BUFFER_SIZE = 512;  // Adjust as needed
 unsigned long runStartTime = 0;
 
+// Sampling configuration
+const unsigned long SAMPLE_PERIOD_MS = 10; // milliseconds per sample
+const unsigned int SAMPLE_FREQUENCY = 1000 / SAMPLE_PERIOD_MS; // Hz
+
 // --- BMI160 Sensor ---
 // DFRobot_BMI160 bmi160;
 // const int8_t ic2_add = 0x68;
@@ -73,14 +77,39 @@ TaskHandle_t WiFiTask;
 TaskHandle_t DataTask;
 TaskHandle_t UploadTask;
 
+// Parameters passed to upload task
+struct UploadParams {
+    char *runName;
+    char *track;
+    char *comments;
+};
+
 void uploadRunTask(void *pvParameter) {
     Serial.println("[UPLOAD] Task started (using SPIFFS)");
 
-    char *runNameC = (char *)pvParameter;
-    String csvPath = "/run.csv"; 
-    if (runNameC != NULL) {
-        csvPath = String(runNameC);
-        free(runNameC);
+    // Extract parameters passed from the HTTP handler
+    UploadParams *up = (UploadParams *)pvParameter;
+    String csvPath = "/run.csv";
+    String trackName = "";
+    String comments = "";
+    if (up) {
+        if (up->runName) {
+            csvPath = String(up->runName);
+            free(up->runName);
+            up->runName = NULL;
+        }
+        if (up->track) {
+            trackName = String(up->track);
+            free(up->track);
+            up->track = NULL;
+        }
+        if (up->comments) {
+            comments = String(up->comments);
+            free(up->comments);
+            up->comments = NULL;
+        }
+        free(up);
+        up = NULL;
     }
 
     // --- 1. Mount SPIFFS (true = format if mount fails) ---
@@ -90,13 +119,11 @@ void uploadRunTask(void *pvParameter) {
         return;
     }
 
-    // --- 2. Open Files ---
-    File jsonFile = SPIFFS.open("/metadata.json", "r");
+    // --- 2. Open CSV file on SD ---
     File csvFile = SD.open(("/" + csvPath).c_str(), "r");
 
-    if (!jsonFile || !csvFile) {
-        Serial.println("[UPLOAD] File not found in SPIFFS or SD");
-        if(jsonFile) jsonFile.close();
+    if (!csvFile) {
+        Serial.println("[UPLOAD] CSV file not found on SD: " + csvPath);
         if(csvFile) csvFile.close();
         vTaskDelete(NULL);
         return;
@@ -121,7 +148,6 @@ void uploadRunTask(void *pvParameter) {
 
     if (!client.connect(host.c_str(), port)) {
         Serial.println("[UPLOAD] HTTPS Connection failed");
-        jsonFile.close();
         csvFile.close();
         vTaskDelete(NULL);
         return;
@@ -132,22 +158,46 @@ void uploadRunTask(void *pvParameter) {
     // --- 4. Build Multipart Body ---
     String boundary = "----ESP32Boundary" + String(millis());
 
-    // Read JSON Metadata from SPIFFS
-    String jsonString = "";
-    while (jsonFile.available()) {
-        jsonString += (char)jsonFile.read();
+    // Build metadata JSON dynamically since metadata.json has been removed.
+    // Count data lines in CSV (subtract header) to estimate run time.
+    size_t newlineCount = 0;
+    while (csvFile.available()) {
+        char c = (char)csvFile.read();
+        if (c == '\n') newlineCount++;
     }
-    jsonFile.close(); 
+    // Reset/close and re-open CSV for streaming later
+    csvFile.close();
+    csvFile = SD.open(("/" + csvPath).c_str(), "r");
+
+    size_t dataLines = 0;
+    if (newlineCount > 0) {
+        // first line is header
+        dataLines = (newlineCount > 0) ? (newlineCount - 1) : 0;
+    }
+    // sample period in ms (use SAMPLE_PERIOD_MS)
+    unsigned long run_time_ms = dataLines * SAMPLE_PERIOD_MS;
+
+    DynamicJsonDocument metaDoc(2048);
+    String csvFileName = csvPath;
+    if (csvFileName.lastIndexOf('/') >= 0) {
+        csvFileName = csvFileName.substring(csvFileName.lastIndexOf('/') + 1);
+    }
+
+    metaDoc["run_name"] = csvFileName;
+    metaDoc["run_comment"] = comments;
+    metaDoc["run_location"] = trackName;
+    metaDoc["run_time"] = run_time_ms;
+    JsonObject sf = metaDoc.createNestedObject("sample_frequency");
+    sf["rear_sus"] = String(SAMPLE_FREQUENCY);
+    sf["front_sus"] = String(SAMPLE_FREQUENCY);
+
+    String jsonString;
+    serializeJson(metaDoc, jsonString);
 
     String jsonPart = 
         "--" + boundary + "\r\n" +
         "Content-Disposition: form-data; name=\"metadata\"\r\n\r\n" + 
         jsonString + "\r\n";
-
-    String csvFileName = csvPath;
-    if (csvFileName.lastIndexOf('/') >= 0) {
-        csvFileName = csvFileName.substring(csvFileName.lastIndexOf('/') + 1);
-    }
 
     String csvHead = 
         "--" + boundary + "\r\n" +
@@ -424,29 +474,49 @@ void WiFiTaskcode(void * pvParameter) {
         Serial.println("[ENDPOINT] /uploadRun POST received");
 
         String runName = "";
-        // First check POST form body
-        if (request->hasParam("run", true)) {
-            runName = request->getParam("run", true)->value();
-        } else if (request->hasParam("run")) {
-            // fallback to query param
-            runName = request->getParam("run")->value();
-        }
+        String track = "";
+        String comments = "";
+
+        // First check POST form body for run/track/comments
+        if (request->hasParam("run", true)) runName = request->getParam("run", true)->value();
+        else if (request->hasParam("run")) runName = request->getParam("run")->value();
+
+        if (request->hasParam("track", true)) track = request->getParam("track", true)->value();
+        else if (request->hasParam("track")) track = request->getParam("track")->value();
+
+        if (request->hasParam("comments", true)) comments = request->getParam("comments", true)->value();
+        else if (request->hasParam("comments")) comments = request->getParam("comments")->value();
 
         if (runName.length() == 0) {
             request->send(400, "text/plain", "Missing 'run' parameter");
             return;
         }
 
-        // Duplicate string to heap for task parameter
-        char *param = strdup(runName.c_str());
-        if (!param) {
+        // Allocate params struct and duplicate strings to heap for task
+        UploadParams *params = (UploadParams *)malloc(sizeof(UploadParams));
+        if (!params) {
+            request->send(500, "text/plain", "Memory allocation failed");
+            return;
+        }
+        params->runName = strdup(runName.c_str());
+        params->track = strdup(track.c_str());
+        params->comments = strdup(comments.c_str());
+
+        if (!params->runName || !params->track || !params->comments) {
+            if (params->runName) free(params->runName);
+            if (params->track) free(params->track);
+            if (params->comments) free(params->comments);
+            free(params);
             request->send(500, "text/plain", "Memory allocation failed");
             return;
         }
 
-        BaseType_t res = xTaskCreate(uploadRunTask, "UploadTask", 12000, param, 1, &UploadTask);
+        BaseType_t res = xTaskCreate(uploadRunTask, "UploadTask", 12000, params, 1, &UploadTask);
         if (res != pdPASS) {
-            free(param);
+            if (params->runName) free(params->runName);
+            if (params->track) free(params->track);
+            if (params->comments) free(params->comments);
+            free(params);
             request->send(500, "text/plain", "Failed to create upload task");
             return;
         }
@@ -565,8 +635,8 @@ void DataTaskcode(void * pvParameter) {
             accumImuUs = 0;
         }
 
-        // use vTaskDelayUntil for a stable period of 10 ms
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10));
+        // use vTaskDelayUntil for a stable period defined by SAMPLE_PERIOD_MS
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(SAMPLE_PERIOD_MS));
     }
 }
 
