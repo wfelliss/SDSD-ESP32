@@ -420,8 +420,8 @@ void flushSensorBuffer() {
 // WiFi Task - Core 1
 void WiFiTaskcode(void * pvParameter) {
     // Start AP
-    WiFi.softAP("ESP32-Setup", "12345678");
-    Serial.println("AP Started. Connect to WiFi 'ESP32-Setup' to configure");
+    WiFi.softAP("SD Squared Telemetry", "sdsquared");
+    Serial.println("AP Started. Connect to WiFi 'SD Squared Telemetry' to configure");
     setOnboardLed(LED_BLINK, 1000);  // Start blinking once
 
     // Setup async server
