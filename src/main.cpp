@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <ESPmDNS.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <AsyncTCP.h>
@@ -307,29 +308,53 @@ void updateOnboardLed() {
         }
     }
 }
+
+// Helper: start the configuration SoftAP and mDNS responder
+void startAP() {
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP("SD Squared Telemetry", "sdsquared");
+    Serial.println("AP Started. Connect to WiFi 'SD Squared Telemetry' to configure");
+    if (!MDNS.begin("esp32-ap")) {  // devices on the SoftAP can use esp32-ap.local
+        Serial.println("Error starting mDNS responder on SoftAP");
+    } else {
+        Serial.println("mDNS responder started on SoftAP as esp32-ap.local");
+    }
+    setOnboardLed(LED_BLINK, 1000);
+}
 // WiFi connection function (blocking, but called in task loop)
 void connectToWiFi() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssidInput.c_str(), passwordInput.c_str());
 
     Serial.print("Connecting to WiFi");
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    const unsigned long wifiTimeoutMs = 120000; // 120s = 2 minutes
+    unsigned long startMillis = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - startMillis) < wifiTimeoutMs) {
         delay(500);
         Serial.print(".");
-        attempts++;
     }
 
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println("\nConnected!");
         Serial.println(WiFi.localIP());
+
+        if (!MDNS.begin("esp32")) {  // esp32.local
+            Serial.println("Error starting mDNS responder");
+        } else {
+            Serial.println("mDNS responder started at esp32.local");
+        }
+
         wifiConnected = true;
         WiFi.softAPdisconnect(true);
         setOnboardLed(LED_SOLID);
     } else {
-        Serial.println("\nFailed to connect.");
+        Serial.println("\nFailed to connect (timeout).");
         wifiConnected = false;
         setOnboardLed(LED_OFF);
+
+        // Restore SoftAP so user can reconnect and retry
+        Serial.println("Restoring SoftAP for user configuration...");
+        startAP();
     }
 }
 
@@ -420,9 +445,7 @@ void flushSensorBuffer() {
 // WiFi Task - Core 1
 void WiFiTaskcode(void * pvParameter) {
     // Start AP
-    WiFi.softAP("SD Squared Telemetry", "sdsquared");
-    Serial.println("AP Started. Connect to WiFi 'SD Squared Telemetry' to configure");
-    setOnboardLed(LED_BLINK, 1000);  // Start blinking once
+    startAP();
 
     // Setup async server
     server.onNotFound([](AsyncWebServerRequest *request){
