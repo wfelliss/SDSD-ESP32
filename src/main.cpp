@@ -314,11 +314,11 @@ void connectToWiFi() {
     WiFi.begin(ssidInput.c_str(), passwordInput.c_str());
 
     Serial.print("Connecting to WiFi");
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    const unsigned long wifiTimeoutMs = 120000; // 120s = 2 minutes
+    unsigned long startMillis = millis();
+    while (WiFi.status() != WL_CONNECTED && (millis() - startMillis) < wifiTimeoutMs) {
         delay(500);
         Serial.print(".");
-        attempts++;
     }
 
     if (WiFi.status() == WL_CONNECTED) {
@@ -335,7 +335,7 @@ void connectToWiFi() {
         WiFi.softAPdisconnect(true);
         setOnboardLed(LED_SOLID);
     } else {
-        Serial.println("\nFailed to connect.");
+        Serial.println("\nFailed to connect (timeout).");
         wifiConnected = false;
         setOnboardLed(LED_OFF);
     }
