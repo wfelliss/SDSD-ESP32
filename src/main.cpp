@@ -175,7 +175,6 @@ void uploadRunTask(void *pvParameter) {
         dataLines = (newlineCount > 0) ? (newlineCount - 1) : 0;
     }
     // sample period in ms (use SAMPLE_PERIOD_MS)
-    unsigned long run_time_ms = dataLines * SAMPLE_PERIOD_MS;
 
     DynamicJsonDocument metaDoc(2048);
     String csvFileName = csvPath;
@@ -190,7 +189,6 @@ void uploadRunTask(void *pvParameter) {
     metaDoc["run_name"] = csvFileName;
     metaDoc["run_comment"] = (comments.length() == 0) ? "NULL" : comments;
     metaDoc["location"] = (trackName.length() == 0) ? "NULL" : trackName;
-    metaDoc["run_time"] = run_time_ms;
     JsonObject sf = metaDoc.createNestedObject("sample_frequency");
     sf["rear_sus"] = String(SAMPLE_FREQUENCY);
     sf["front_sus"] = String(SAMPLE_FREQUENCY);
