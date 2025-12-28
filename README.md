@@ -33,10 +33,10 @@ This project is a high-frequency data logging system for vehicle suspension tele
 
 | State | RGB LED | Onboard LED | Description |
 | :--- | :--- | :--- | :--- |
-| **Setup** | 🟣 Purple | Off | Initializing SPIFFS/SD/Tasks |
+| **Setup** | 🟣 Purple | Off | Initializing LittleFS/SD/Tasks |
 | **Ready/Idle** | 🟢 Green | Solid (if Wi-Fi ok) | System ready, not recording |
 | **Recording** | 🔴 Red | Solid | Writing sensor data to SD card |
-| **Error** | 🔵 Blue | Off | SD Card mount or SPIFFS failure |
+| **Error** | 🔵 Blue | Off | SD Card mount or LittleFS failure |
 | **Connecting** | State color | ⚪ Blinking | Attempting to join Wi-Fi network |
 | **Connected** | State color | ⚪ Solid | Successfully joined Wi-Fi |
 
