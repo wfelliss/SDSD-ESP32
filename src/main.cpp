@@ -2,7 +2,7 @@
 #include <WiFiClientSecure.h>
 #include <ESPmDNS.h>
 #include <FS.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <HTTPClient.h>
@@ -86,7 +86,7 @@ struct UploadParams {
 };
 
 void uploadRunTask(void *pvParameter) {
-    Serial.println("[UPLOAD] Task started (using SPIFFS)");
+    Serial.println("[UPLOAD] Task started (using LittleFS and SD)");
 
     // Extract parameters passed from the HTTP handler
     UploadParams *up = (UploadParams *)pvParameter;
@@ -113,9 +113,9 @@ void uploadRunTask(void *pvParameter) {
         up = NULL;
     }
 
-    // --- 1. Mount SPIFFS (true = format if mount fails) ---
-    if (!SPIFFS.begin(true) || !SD.begin(SD_CS_PIN)) {
-        Serial.println("[UPLOAD] Storage mount failed (SPIFFS or SD)");
+    // --- 1. Mount LittleFS (true = format if mount fails) ---
+    if (!LittleFS.begin(true) || !SD.begin(SD_CS_PIN)) {
+        Serial.println("[UPLOAD] Storage mount failed (LittleFS or SD)");
         vTaskDelete(NULL);
         return;
     }
@@ -455,7 +455,7 @@ void WiFiTaskcode(void * pvParameter) {
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (wifiConnected) request->redirect("/connected");
-        else request->send(SPIFFS, "/index.html", "text/html");
+        else request->send(LittleFS, "/index.html", "text/html");
     });
 
     server.on("/connect", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -471,7 +471,7 @@ void WiFiTaskcode(void * pvParameter) {
     });
 
     server.on("/connected", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (wifiConnected) request->send(SPIFFS, "/connected.html", "text/html");
+        if (wifiConnected) request->send(LittleFS, "/connected.html", "text/html");
         else request->redirect("/");
     });
 
@@ -683,8 +683,8 @@ void setup() {
     setupPins();
     setLedColor(1, 1, 1);  // Purple while setting up
 
-    if (!SPIFFS.begin(true)) {
-        Serial.println("Failed to mount SPIFFS");
+    if (!LittleFS.begin(true)) {
+        Serial.println("Failed to mount LittleFS");
         setLedColor(0, 0, 1); // Blue Failed
         while(true) delay(1000); // halt here
     }
@@ -704,8 +704,8 @@ void setup() {
     //     while(true) delay(1000); // halt here
     // }
 
-    server.serveStatic("/style.css", SPIFFS, "/style.css");
-    server.serveStatic("/script.js", SPIFFS, "/script.js");
+    server.serveStatic("/style.css", LittleFS, "/style.css");
+    server.serveStatic("/script.js", LittleFS, "/script.js");
 
     // Start tasks on separate cores
     xTaskCreatePinnedToCore(WiFiTaskcode, "WiFiTask", 12000, NULL, 1, &WiFiTask, 1);  // Core 1
