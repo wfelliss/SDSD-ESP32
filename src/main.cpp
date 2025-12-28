@@ -381,8 +381,37 @@ void startNewRun() {
         return;
     }
 
-    unsigned long timestamp = millis();
-    currentRunFilePath = "/run_" + String(timestamp) + ".csv";
+    // Determine next run number by scanning SD root for existing run_<n>.csv files
+    int maxRun = 0;
+    File root = SD.open("/");
+    if (root) {
+        File file = root.openNextFile();
+        while (file) {
+            if (!file.isDirectory()) {
+                String fname = String(file.name());
+                if (fname.startsWith("/")) fname = fname.substring(1);
+                if (fname.startsWith("run_") && fname.endsWith(".csv")) {
+                    int u = fname.indexOf('_');
+                    int d = fname.lastIndexOf('.');
+                    if (u >= 0 && d > u) {
+                        String numStr = fname.substring(u + 1, d);
+                        bool allDigits = true;
+                        for (size_t i = 0; i < numStr.length(); ++i) {
+                            if (!isDigit(numStr.charAt(i))) { allDigits = false; break; }
+                        }
+                        if (allDigits) {
+                            int val = numStr.toInt();
+                            if (val > maxRun) maxRun = val;
+                        }
+                    }
+                }
+            }
+            file = root.openNextFile();
+        }
+        root.close();
+    }
+    int nextRun = maxRun + 1;
+    currentRunFilePath = "/run_" + String(nextRun) + ".csv";
 
     File file = SD.open(currentRunFilePath.c_str(), FILE_WRITE);
     if (!file) {
@@ -424,21 +453,17 @@ void flushSensorBuffer() {
 }
 
 // IMUData getAccelGyro() {
-//     IMUData data;
-//     data.valid = false;
-
-//     int16_t raw[6] = {0};
-
-//     int rslt = bmi160.getAccelGyroData(raw);
-
-//     if (rslt == 0) {
-//         for (int i = 0; i < 6; i++) {
-//             data.values[i] = raw[i];
-//         }
-//         data.valid = true;
-//     }
-
-//     return data;
+    //     IMUData data;
+    //     data.valid = false;
+    //     int16_t raw[6] = {0};
+    //     int rslt = bmi160.getAccelGyroData(raw);
+    //     if (rslt == 0) {
+    //         for (int i = 0; i < 6; i++) {
+    //             data.values[i] = raw[i];
+    //         }
+    //         data.valid = true;
+    //     }
+    //     return data;
 // }
 // WiFi Task - Core 1
 void WiFiTaskcode(void * pvParameter) {
