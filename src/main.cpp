@@ -176,7 +176,7 @@ void uploadRunTask(void *pvParameter) {
     }
     // sample period in ms (use SAMPLE_PERIOD_MS)
 
-    DynamicJsonDocument metaDoc(2048);
+    JsonDocument metaDoc;
     String csvFileName = csvPath;
     if (csvFileName.lastIndexOf('/') >= 0) { // extracts filename from path
         csvFileName = csvFileName.substring(csvFileName.lastIndexOf('/') + 1);
@@ -189,7 +189,7 @@ void uploadRunTask(void *pvParameter) {
     metaDoc["run_name"] = csvFileName;
     metaDoc["run_comment"] = (comments.length() == 0) ? "NULL" : comments;
     metaDoc["location"] = (trackName.length() == 0) ? "NULL" : trackName;
-    JsonObject sf = metaDoc.createNestedObject("sample_frequency");
+    JsonObject sf = metaDoc["sample_frequency"].to<JsonObject>();
     sf["rear_sus"] = String(SAMPLE_FREQUENCY);
     sf["front_sus"] = String(SAMPLE_FREQUENCY);
 
@@ -481,7 +481,7 @@ void WiFiTaskcode(void * pvParameter) {
             return;
         }
 
-        DynamicJsonDocument doc(2048);
+        JsonDocument doc;
         JsonArray runsArray = doc.to<JsonArray>();
 
         File root = SD.open("/");
@@ -492,7 +492,7 @@ void WiFiTaskcode(void * pvParameter) {
                 String fileName = String(file.name());
                 size_t fileSize = file.size();
                 
-                JsonObject fileObj = runsArray.createNestedObject();
+                JsonObject fileObj = runsArray.add<JsonObject>();
                 fileObj["name"] = fileName;
                 fileObj["size"] = fileSize;
                 Serial.println("Found file: " + fileName + " (" + String(fileSize) + " bytes)");
