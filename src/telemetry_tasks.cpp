@@ -32,11 +32,12 @@ void DataTaskcode(void * pvParameter) {
             if (reading != buttonState) {
                 buttonState = reading;
                 if (buttonState == LOW) {
-                    recording = !recording;
-                    if (recording) {
-                        setLedColor(1, 0, 0);
+                    recording = (recording + 1) % 3; // 0, 1, 2 cycle
+                    if (recording == 1) { // setup
+                        // set led to yellow
+                        setLedColor(1, 1, 0);
                         startNewRun();
-                    } else {
+                    } else if (recording == 0) { // stopped recording
                         setLedColor(0, 1, 0);
                         if (!sensorBuffer.empty()) flushSensorBuffer();
                     }
@@ -46,7 +47,8 @@ void DataTaskcode(void * pvParameter) {
         lastButtonState = reading;
 
         // --- Capture data ---
-        if (recording) {
+        if (recording == 2) { // actively recording
+            setLedColor(1, 0, 0); // red
             SensorLine line;
 
             uint32_t tImuStart = micros();

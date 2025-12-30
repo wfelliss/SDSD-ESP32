@@ -4,13 +4,13 @@
 AsyncWebServer server(80);
 volatile bool wifiConnected = false;
 volatile bool startWiFiConnect = false;
-volatile bool recording = false;
+volatile int recording = 0; // 0 = not recording, 1 = setup, 2 = recording
 
 String ssidInput = "";
 String passwordInput = "";
 String currentRunFilePath = "";
 
-int currentLedMode = LED_OFF;
+int currentOnboardLedMode = LED_OFF;
 bool ledState = false;
 unsigned long lastBlinkMillis = 0;
 unsigned long blinkInterval = 500;
@@ -20,7 +20,7 @@ TaskHandle_t DataTask = NULL;
 TaskHandle_t UploadTask = NULL;
 
 void updateOnBoardLed() {
-    if (currentLedMode == LED_BLINK) {
+    if (currentOnboardLedMode == LED_BLINK) {
         unsigned long now = millis();
         if (now - lastBlinkMillis >= blinkInterval) {
             lastBlinkMillis = now;
@@ -31,7 +31,7 @@ void updateOnBoardLed() {
 }
 
 void setOnboardLed(int mode, unsigned long interval) {
-    currentLedMode = mode;
+    currentOnboardLedMode = mode;
     blinkInterval = interval;
 
     switch (mode) {

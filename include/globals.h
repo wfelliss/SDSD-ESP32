@@ -5,7 +5,7 @@
 extern AsyncWebServer server;
 extern volatile bool wifiConnected;
 extern volatile bool startWiFiConnect;
-extern volatile bool recording;
+extern volatile int recording;
 
 extern String ssidInput;
 extern String passwordInput;
@@ -15,7 +15,7 @@ extern TaskHandle_t WiFiTask;
 extern TaskHandle_t DataTask;
 extern TaskHandle_t UploadTask;
 
-extern int currentLedMode;
+extern int currentOnboardLedMode;
 extern bool ledState;
 extern unsigned long lastBlinkMillis;
 extern unsigned long blinkInterval;
