@@ -21,10 +21,11 @@ function renderRuns() {
 
     let html = "<ul>";
     runsList.forEach((run, index) => {
-        html += `<li id="run-${index}">
-                    <span>${run.name} (${run.size} bytes)</span>
-                    <button onclick="addMetadata(${index})">Add metadata</button>
-                 </li>`;
+          html += `<li id="run-${index}">
+                          <span>${run.name} (${run.size} bytes)</span>
+                          <button onclick="addMetadata(${index})">Add metadata</button>
+                          <button class="delete-btn" onclick="deleteRun(${index})">Delete</button>
+                      </li>`;
     });
     html += "</ul>";
     container.innerHTML = html;
@@ -81,13 +82,62 @@ async function uploadRun(index) {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: params.toString()
         });
-        if (response.ok) statusEl.textContent = "Upload started";
-        else statusEl.textContent = "Upload failed: " + response.status;
+        if (response.ok) {
+            statusEl.textContent = "Upload started";
+            // Wait for server-side deletion of the file before reloading list
+            const deleted = await waitForFileDeletion(runName, 60000, 1000);
+            if (deleted) statusEl.textContent = "Upload finished — run removed";
+            else statusEl.textContent = "Upload started (file still present)";
+        } else {
+            statusEl.textContent = "Upload failed: " + response.status;
+        }
     } catch (err) {
         statusEl.textContent = "Upload failed: " + err.message;
     }
+    loadRuns();
+}
+function deleteRun(index) {
+    if (!runsList || !runsList[index]) return;
+    const runName = runsList[index].name;
+    const statusEl = document.getElementById('uploadStatus');
+    fetch('/deleteRun', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ run: runName })
+    }).then(response => {
+        if (response.ok) {
+            statusEl.textContent = "Run deleted: waiting for update...";
+            // wait a short time for deletion to complete on server, then reload when gone
+            waitForFileDeletion(runName, 20000, 800).then(deleted => {
+                if (deleted) statusEl.textContent = "Run deleted: " + runName;
+                else statusEl.textContent = "Run deletion may still be pending";
+                loadRuns();
+            });
+        } else {
+            statusEl.textContent = "Failed to delete run: " + response.status;
+        }
+    }).catch(err => {
+        statusEl.textContent = "Error deleting run: " + err.message;
+    });
 }
 
+// Poll /runs until the named run is no longer present or timeout elapses
+async function waitForFileDeletion(runName, timeoutMs = 20000, intervalMs = 1000) {
+    const start = Date.now();
+    while ((Date.now() - start) < timeoutMs) {
+        try {
+            const resp = await fetch('/runs');
+            if (!resp.ok) return false;
+            const runs = await resp.json();
+            const found = (runs || []).some(r => r.name === runName);
+            if (!found) return true;
+        } catch (e) {
+            // ignore and retry until timeout
+        }
+        await new Promise(r => setTimeout(r, intervalMs));
+    }
+    return false;
+}
 // Load runs on page load
 loadRuns();
 
