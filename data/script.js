@@ -41,6 +41,10 @@ function addMetadata(index) {
             <input type="text" id="trackInput-${index}" placeholder="Enter track name" style="margin-top:4px;" />
             <label for="commentsInput-${index}">Comments:</label>
             <input type="text" id="commentsInput-${index}" placeholder="Enter comments" style="margin-top:4px;" />
+            <label for="frontStrokeInput-${index}">Front Stroke:</label>
+            <input type="text" id="frontStrokeInput-${index}" placeholder="Enter front stroke" style="margin-top:4px;" />
+            <label for="rearStrokeInput-${index}">Rear Stroke:</label>
+            <input type="text" id="rearStrokeInput-${index}" placeholder="Enter rear stroke" style="margin-top:4px;" />
             <div style="margin-top:6px;">
                 <button onclick="uploadRun(${index})">Upload</button>
                 <button onclick="renderRuns()">Cancel</button>
@@ -59,6 +63,10 @@ async function uploadRun(index) {
     const commentsInput = document.getElementById(`commentsInput-${index}`);
     const trackName = trackInput && trackInput.value ? trackInput.value.trim() : '';
     const comments = commentsInput && commentsInput.value ? commentsInput.value.trim() : '';
+    const frontStrokeInput = document.getElementById(`frontStrokeInput-${index}`);
+    const rearStrokeInput = document.getElementById(`rearStrokeInput-${index}`);
+    const frontStroke = frontStrokeInput && frontStrokeInput.value ? parseInt(frontStrokeInput.value.trim()) : 0;
+    const rearStroke = rearStrokeInput && rearStrokeInput.value ? parseInt(rearStrokeInput.value.trim()) : 0;
     statusEl.textContent = `Uploading ${runName}${trackName ? ' (track: ' + trackName + ')' : ''}...`;
 
     try {
@@ -66,6 +74,8 @@ async function uploadRun(index) {
         params.append('run', runName);
         if (trackName) params.append('track', trackName);
         if (comments) params.append('comments', comments);
+        if (frontStroke) params.append('front_stroke', frontStroke);
+        if (rearStroke) params.append('rear_stroke', rearStroke);
         const response = await fetch('/uploadRun', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
