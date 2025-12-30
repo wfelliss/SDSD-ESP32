@@ -59,19 +59,24 @@ This project is a high-frequency data logging system for vehicle suspension tele
 The codebase is modularized to separate hardware configuration, global state, storage logic, and networking tasks.
 
 ### ⚙️ Core Logic
-* **`main.cpp`**: The entry point that initializes hardware and launches FreeRTOS tasks on specific cores.
-* **`config.h`**: The single source of truth for hardware, containing pin definitions, sensor sample rates, and backend API URLs.
-* **`globals.h / .cpp`**: Manages shared variables like WiFi status and recording state, and handles non-blocking LED animations.
+* **`main.cpp`**: The entry point. It initializes hardware pins, mounts storage, and launches the FreeRTOS tasks on specific cores.
+* **`config.h`**: The single source of truth for hardware. It contains pin definitions (LEDs, sensors, SD), sampling frequency, and the backend API URL.
+* **`globals.h / .cpp`**: Manages the system's "brain." It stores shared variables like WiFi status and recording state, and handles the `updateOnBoardLed()` logic for non-blocking blinking.
 
 ### 💾 Data & Storage
-* **`storage_manager.h / .cpp`**: Handles SD Card and LittleFS operations, including creating new run files and flushing RAM buffers.
+* **`storage_manager.h / .cpp`**: Handles the heavy lifting for the **SD Card** and **LittleFS**. It manages the creation of new run files (e.g., `run_1.csv`) and flushes data buffers from RAM to the physical card.
 * **`telemetry_tasks.h / .cpp`**: Contains the dual-core execution loops:
-    * **Core 0 (`DataTask`)**: High-priority loop for 100Hz sensor sampling and button debouncing.
+    * **Core 0 (`DataTask`)**: High-priority loop for 100Hz sensor sampling and physical button debouncing.
     * **Core 1 (`WiFiTask`)**: Manages the web server and system updates.
 
-### 🌐 Networking
-* **`network_manager.h / .cpp`**: Orchestrates WiFi connectivity (AP vs. Station mode) and defines all Async Web Server routes.
-* **Background Upload**: A specialized task that streams large CSV files from the SD card to a Railway backend via multipart HTTPS.
+### 🌐 Networking & Web Interface
+* **`network_manager.h / .cpp`**: Orchestrates WiFi connectivity (AP vs. Station mode) and defines all **Async Web Server** routes for the dashboard and data management.
+* **`/data` Folder (Web Interface)**: Static assets served from LittleFS to provide the user interface:
+    * **`index.html`**: The initial WiFi configuration portal used to connect the ESP32 to a local network.
+    * **`connected.html`**: The main telemetry dashboard for viewing recorded runs and entering metadata.
+    * **`style.css`**: The stylesheet providing a clean, responsive design for both mobile and desktop users.
+    * **`script.js`**: Frontend logic that fetches the run list, handles metadata forms, and communicates with the ESP32 API.
+* **Background Upload**: A specialized `uploadRunTask` that streams large CSV files from the SD card to a Railway backend via multipart HTTPS.
 
 ---
 
