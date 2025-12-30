@@ -135,6 +135,26 @@ void setupWebRoutes() {
         request->send(200, "text/plain", "Upload started in background");
     });
 
+    server.on("/deleteRun", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (request->hasParam("run", true) || request->hasParam("run")) {
+            String runName = request->hasParam("run", true) ? request->getParam("run", true)->value() : request->getParam("run")->value();
+            if (!SD.begin(SD_CS_PIN)) {
+                request->send(500, "text/plain", "SD Card mount failed");
+                return;
+            }
+            if (SD.exists("/" + runName)) {
+                SD.remove("/" + runName);
+                Serial.println("Deleted run: " + runName);
+                request->send(200, "text/plain", "Run deleted");
+            } else {
+                request->send(404, "text/plain", "Run not found");
+            }
+        } else {
+            request->send(400, "text/plain", "Missing 'run' parameter");
+        }
+        
+    });
+
     server.serveStatic("/style.css", LittleFS, "/style.css");
     server.serveStatic("/script.js", LittleFS, "/script.js");
 }

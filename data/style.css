@@ -112,6 +112,15 @@ button:hover {
     background: #0056b3;
 }
 
+/* Delete button style */
+.delete-btn {
+    background: #d9534f;
+    color: #fff;
+}
+.delete-btn:hover {
+    background: #c9302c;
+}
+
 /* Paragraphs */
 p {
     font-size: 1em;
