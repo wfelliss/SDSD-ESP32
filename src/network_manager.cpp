@@ -77,6 +77,8 @@ void setupWebRoutes() {
         String runName = "";
         String track = "";
         String comments = "";
+        int frontStroke = 0;
+        int rearStroke = 0;
 
         // First check POST form body for run/track/comments
         if (request->hasParam("run", true)) runName = request->getParam("run", true)->value();
@@ -87,6 +89,12 @@ void setupWebRoutes() {
 
         if (request->hasParam("comments", true)) comments = request->getParam("comments", true)->value();
         else if (request->hasParam("comments")) comments = request->getParam("comments")->value();
+
+        if (request->hasParam("front_stroke", true)) frontStroke = request->getParam("front_stroke", true)->value().toInt();
+        else if (request->hasParam("front_stroke")) frontStroke = request->getParam("front_stroke")->value().toInt();
+
+        if (request->hasParam("rear_stroke", true)) rearStroke = request->getParam("rear_stroke", true)->value().toInt();
+        else if (request->hasParam("rear_stroke")) rearStroke = request->getParam("rear_stroke")->value().toInt();
 
         if (runName.length() == 0) {
             request->send(400, "text/plain", "Missing 'run' parameter");
@@ -102,6 +110,8 @@ void setupWebRoutes() {
         params->runName = strdup(runName.c_str());
         params->track = strdup(track.c_str());
         params->comments = strdup(comments.c_str());
+        params->frontStroke = frontStroke;
+        params->rearStroke = rearStroke;
 
         if (!params->runName || !params->track || !params->comments) {
             if (params->runName) free(params->runName);
@@ -137,6 +147,8 @@ void uploadRunTask(void *pvParameter) {
     String csvPath = "/run.csv";
     String trackName = "";
     String comments = "";
+    int frontStroke = 0;
+    int rearStroke = 0;
     if (up) {
         if (up->runName) {
             csvPath = String(up->runName);
@@ -152,6 +164,12 @@ void uploadRunTask(void *pvParameter) {
             comments = String(up->comments);
             free(up->comments);
             up->comments = NULL;
+        }
+        if (up->frontStroke) {
+            frontStroke = up->frontStroke;
+        }
+        if (up->rearStroke) {
+            rearStroke = up->rearStroke;
         }
         free(up);
         up = NULL;
@@ -233,6 +251,11 @@ void uploadRunTask(void *pvParameter) {
     metaDoc["run_name"] = csvFileName;
     metaDoc["run_comment"] = (comments.length() == 0) ? "NULL" : comments;
     metaDoc["location"] = (trackName.length() == 0) ? "NULL" : trackName;
+    // Apply sensible defaults if not provided
+    if (frontStroke == 0) frontStroke = 220; // max front pot travel
+    if (rearStroke == 0) rearStroke = 80; // max rear pot travel
+    metaDoc["front_stroke"] = frontStroke;
+    metaDoc["rear_stroke"] = rearStroke;
     JsonObject sf = metaDoc["sample_frequency"].to<JsonObject>();
     sf["rear_sus"] = String(SAMPLE_FREQUENCY);
     sf["front_sus"] = String(SAMPLE_FREQUENCY);

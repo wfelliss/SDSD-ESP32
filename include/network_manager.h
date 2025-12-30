@@ -5,6 +5,8 @@ struct UploadParams {
     char *runName;
     char *track;
     char *comments;
+    int frontStroke;
+    int rearStroke;
 };
 
 void startAP();
