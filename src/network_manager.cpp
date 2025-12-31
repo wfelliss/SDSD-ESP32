@@ -378,15 +378,18 @@ void startAP() {
 }
 // WiFi connection function (blocking, but called in task loop)
 void connectToWiFi() {
+    setOnboardLed(LED_BLINK, 200);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssidInput.c_str(), passwordInput.c_str());
 
     Serial.print("Connecting to WiFi");
-    const unsigned long wifiTimeoutMs = 120000; // 120s = 2 minutes
+    const unsigned long wifiTimeoutMs = 30000; // 30s
     unsigned long startMillis = millis();
+    int dotCounter = 0;
     while (WiFi.status() != WL_CONNECTED && (millis() - startMillis) < wifiTimeoutMs) {
-        delay(500);
-        Serial.print(".");
+        updateOnBoardLed();
+        delay(100); // keep loop responsive; print dot every 5th iteration (500ms)
+        if (++dotCounter % 5 == 0) Serial.print(".");
     }
 
     if (WiFi.status() == WL_CONNECTED) {
@@ -410,5 +413,29 @@ void connectToWiFi() {
         // Restore SoftAP so user can reconnect and retry
         Serial.println("Restoring SoftAP for user configuration...");
         startAP();
+    }
+}
+
+void WiFiEvent(WiFiEvent_t event) {
+    switch (event) {
+        case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+            Serial.println("WiFi lost or Hotspot turned off.");
+            
+            // Only trigger a reconnect if we were previously successful
+            // and aren't already trying to connect.
+            if (wifiConnected) {
+                wifiConnected = false;
+                startWiFiConnect = true; 
+                Serial.println("Triggering reconnection logic...");
+            }
+            break;
+
+        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+            Serial.print("Obtained IP: ");
+            Serial.println(WiFi.localIP());
+            wifiConnected = true;
+            break;
+            
+        default: break;
     }
 }

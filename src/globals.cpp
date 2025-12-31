@@ -1,5 +1,6 @@
 #include "globals.h"
 #include "config.h"
+#include <WiFi.h>
 
 AsyncWebServer server(80);
 volatile bool wifiConnected = false;

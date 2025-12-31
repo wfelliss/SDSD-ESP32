@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <WiFi.h>
 
 extern AsyncWebServer server;
 extern volatile bool wifiConnected;
