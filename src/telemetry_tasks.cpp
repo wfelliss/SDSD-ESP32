@@ -109,6 +109,7 @@ void WiFiTaskcode(void * pvParameter) {
     startAP();
     setupWebRoutes();
     server.begin();
+    WiFi.onEvent(WiFiEvent);
     while (true) {
         if (startWiFiConnect) {
             startWiFiConnect = false;
