@@ -272,7 +272,7 @@ void uploadRunTask(void *pvParameter) {
     metaDoc["run_comment"] = (comments.length() == 0) ? "NULL" : comments;
     metaDoc["location"] = (trackName.length() == 0) ? "NULL" : trackName;
     // Apply sensible defaults if not provided
-    if (frontStroke == 0) frontStroke = 220; // max front pot travel
+    if (frontStroke == 0) frontStroke = 230; // max front pot travel
     if (rearStroke == 0) rearStroke = 80; // max rear pot travel
     metaDoc["front_stroke"] = frontStroke;
     metaDoc["rear_stroke"] = rearStroke;
