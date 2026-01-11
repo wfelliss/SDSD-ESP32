@@ -59,9 +59,9 @@ void startNewRun() {
 
     file.println("acc1,acc2,acc3,acc4,acc5,acc6,rear_sus,front_sus");
     file.print("0,0,0,0,0,0,");
-    file.print(analogRead(REAR_SUS_PIN));
+    file.print(4095 - analogRead(REAR_SUS_PIN));
     file.print(",");
-    file.println(4095 - analogRead(FRONT_SUS_PIN));
+    file.println(analogRead(FRONT_SUS_PIN));
     file.close();
 
     sensorBuffer.clear();
