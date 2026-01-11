@@ -75,7 +75,7 @@ void DataTaskcode(void * pvParameter) {
             }
 
             line.rear_sus = analogRead(REAR_SUS_PIN);
-            line.front_sus = 4095 - analogRead(FRONT_SUS_PIN);
+            line.front_sus = analogRead(FRONT_SUS_PIN);
 
             sensorBuffer.push_back(line);
 
