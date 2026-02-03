@@ -169,6 +169,8 @@ void uploadRunTask(void *pvParameter) {
     String comments = "";
     int frontStroke = 0;
     int rearStroke = 0;
+    bool useLocalServer = false; // Toggle: false = HTTPS (Railway), true = HTTP (local)
+    
     if (up) {
         if (up->runName) {
             csvPath = String(up->runName);
@@ -191,6 +193,10 @@ void uploadRunTask(void *pvParameter) {
         if (up->rearStroke) {
             rearStroke = up->rearStroke;
         }
+        // Add useLocalServer to UploadParams struct if you want to pass it dynamically
+        // if (up->useLocalServer) {
+        //     useLocalServer = up->useLocalServer;
+        // }
         free(up);
         up = NULL;
     }
@@ -212,31 +218,61 @@ void uploadRunTask(void *pvParameter) {
         return;
     }
 
-    // --- 3. Setup Secure Client ---
-    WiFiClientSecure client;
-    client.setInsecure(); // Required for Railway's SSL certificates
+    // --- 3. Setup Client (HTTP or HTTPS) ---
+    WiFiClient *client;
+    WiFiClient httpClient;
+    WiFiClientSecure httpsClient;
     
-    // Parse URL for Host/Path
-    String url = EXTERNAL_SERVER_URL;
-    url.replace("https://", "");
-    url.replace("http://", "");
+    String url;
+    String host;
+    String path;
+    int port;
     
-    int slashIndex = url.indexOf('/');
-    String host = url.substring(0, slashIndex);
-    String path = url.substring(slashIndex);
+    if (useLocalServer) {
+        // Local HTTP server configuration
+        client = &httpClient;
+        url = "http://192.168.1.181:3001/api/s3/newRunFile"; // Replace with your local IP and port
+        port = 3001; // Your local server port
+        
+        url.replace("http://", "");
+        int slashIndex = url.indexOf('/');
+        host = url.substring(0, slashIndex);
+        
+        // Extract port from host if present
+        int colonIndex = host.indexOf(':');
+        if (colonIndex > 0) {
+            port = host.substring(colonIndex + 1).toInt();
+            host = host.substring(0, colonIndex);
+        }
+        
+        path = url.substring(slashIndex);
+        
+        Serial.println("[UPLOAD] Using LOCAL HTTP server: " + host + ":" + String(port));
+    } else {
+        // Railway HTTPS server configuration
+        client = &httpsClient;
+        httpsClient.setInsecure(); // Required for Railway's SSL certificates
+        
+        url = EXTERNAL_SERVER_URL;
+        url.replace("https://", "");
+        url.replace("http://", "");
+        
+        int slashIndex = url.indexOf('/');
+        host = url.substring(0, slashIndex);
+        path = url.substring(slashIndex);
+        port = 443; // Always 443 for Railway HTTPS
+        
+        Serial.println("[UPLOAD] Using RAILWAY HTTPS server: " + host + " (Port 443)");
+    }
     
-    int port = 443; // Always 443 for Railway HTTPS
-    
-    Serial.println("[UPLOAD] Connecting to: " + host + " (Port 443)");
-
-    if (!client.connect(host.c_str(), port)) {
-        Serial.println("[UPLOAD] HTTPS Connection failed");
+    if (!client->connect(host.c_str(), port)) {
+        Serial.println("[UPLOAD] Connection failed");
         csvFile.close();
         vTaskDelete(NULL);
         return;
     }
     
-    client.setTimeout(15); 
+    client->setTimeout(15); 
 
     // --- 4. Build Multipart Body ---
     String boundary = "----ESP32Boundary" + String(millis());
@@ -297,30 +333,30 @@ void uploadRunTask(void *pvParameter) {
     size_t totalLen = jsonPart.length() + csvHead.length() + csvFile.size() + tail.length();
 
     // --- 5. Send POST Request ---
-    client.print("POST " + path + " HTTP/1.1\r\n");
-    client.print("Host: " + host + "\r\n"); // Railway needs this header!
-    client.print("Content-Type: multipart/form-data; boundary=" + boundary + "\r\n");
-    client.print("Content-Length: " + String(totalLen) + "\r\n");
-    client.print("Connection: close\r\n\r\n");
+    client->print("POST " + path + " HTTP/1.1\r\n");
+    client->print("Host: " + host + "\r\n");
+    client->print("Content-Type: multipart/form-data; boundary=" + boundary + "\r\n");
+    client->print("Content-Length: " + String(totalLen) + "\r\n");
+    client->print("Connection: close\r\n\r\n");
 
-    client.print(jsonPart);
-    client.print(csvHead);
+    client->print(jsonPart);
+    client->print(csvHead);
 
     // Stream CSV Data from SD Card
     uint8_t buf[1024];
     while (csvFile.available()) {
         int r = csvFile.read(buf, sizeof(buf));
         if (r <= 0) break;
-        client.write(buf, r);
+        client->write(buf, r);
     }
     
-    client.print(tail);
+    client->print(tail);
     csvFile.close();
 
     Serial.println("[UPLOAD] Data sent. Reading response...");
 
     // Ensure outgoing data is flushed from TCP buffers
-    client.flush();
+    client->flush();
 
     // --- 6. Read Response ---
     String response = "";
@@ -328,15 +364,15 @@ void uploadRunTask(void *pvParameter) {
     const unsigned long overallTimeoutMs = 15000; // wait up to 15s for server response
 
     // Wait for initial data with a short poll loop (keeps WiFi stack responsive)
-    while (!client.available() && client.connected() && (millis() - lastReceive) < overallTimeoutMs) {
+    while (!client->available() && client->connected() && (millis() - lastReceive) < overallTimeoutMs) {
         delay(10);
     }
 
     // Read until the server closes the connection or we hit the overall timeout
     lastReceive = millis();
-    while ((client.connected() || client.available()) && (millis() - lastReceive) < overallTimeoutMs) {
-        while (client.available()) {
-            char c = (char)client.read();
+    while ((client->connected() || client->available()) && (millis() - lastReceive) < overallTimeoutMs) {
+        while (client->available()) {
+            char c = (char)client->read();
             response += c;
             lastReceive = millis();
         }
@@ -361,7 +397,7 @@ void uploadRunTask(void *pvParameter) {
         Serial.println("[UPLOAD] Upload failed or returned error. Keeping files for retry.");
     }
 
-    client.stop();
+    client->stop();
     vTaskDelete(NULL);
 }
 

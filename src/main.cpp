@@ -6,17 +6,15 @@
 
 void setup() {
     Serial.begin(115200);
-    
+
+    WiFi.setTxPower(WIFI_POWER_8_5dBm); // Set WiFi transmit power to 8.5 dBm
+
     // Hardware Setup
     pinMode(RED_LED_PIN, OUTPUT);
     pinMode(GREEN_LED_PIN, OUTPUT);
     pinMode(BLUE_LED_PIN, OUTPUT);
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(ONBOARD_LED_PIN, OUTPUT);
-    setOnboardLed(LED_OFF);
-    digitalWrite(RED_LED_PIN, HIGH);
-    digitalWrite(GREEN_LED_PIN, HIGH);
-    digitalWrite(BLUE_LED_PIN, HIGH);
 
     setLedColor(1, 1, 1); // Loading state
 
