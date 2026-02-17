@@ -231,7 +231,7 @@ void uploadRunTask(void *pvParameter) {
     if (useLocalServer) {
         // Local HTTP server configuration
         client = &httpClient;
-        url = "http://192.168.1.181:3001/api/s3/newRunFile"; // Replace with your local IP and port
+        url = LOCAL_SERVER_URL; // Replace with your local IP and port
         port = 3001; // Your local server port
         
         url.replace("http://", "");

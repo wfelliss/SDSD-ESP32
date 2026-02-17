@@ -7,6 +7,11 @@
 void setup() {
     Serial.begin(115200);
 
+    unsigned long start = millis();
+    while (!Serial && (millis() - start < 4000)) {
+        delay(10);
+    }
+
     WiFi.setTxPower(WIFI_POWER_8_5dBm); // Set WiFi transmit power to 8.5 dBm
 
     // Hardware Setup
