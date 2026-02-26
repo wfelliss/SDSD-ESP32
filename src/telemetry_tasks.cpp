@@ -3,6 +3,52 @@
 #include "storage_manager.h"
 #include "network_manager.h"
 
+#define SUS_NUM_SAMPLES 20
+#define SUS_SIGMA_K     2.0f   // reject samples beyond 2σ from the burst mean
+static_assert(SUS_NUM_SAMPLES >= 5, "SUS_NUM_SAMPLES must be >= 5 for a meaningful sigma estimate");
+
+// Takes SUS_NUM_SAMPLES rapid ADC reads, computes the burst mean and standard
+// deviation, then averages only the samples within SUS_SIGMA_K * sigma of the
+// mean. Outlier spikes separated from the cluster by >2σ are discarded.
+// At N=20, sigma is stable enough that a single spike cannot inflate it enough
+// to hide itself. Total time ~2 ms for both pins, well within the 10 ms window.
+static int stddevFilteredADC(uint8_t pin) {
+    int samples[SUS_NUM_SAMPLES];
+    for (int i = 0; i < SUS_NUM_SAMPLES; i++) {
+        samples[i] = analogRead(pin);
+    }
+
+    // First pass: mean
+    float sum = 0;
+    for (int i = 0; i < SUS_NUM_SAMPLES; i++) sum += samples[i];
+    float mean = sum / SUS_NUM_SAMPLES;
+
+    // Second pass: standard deviation
+    float variance = 0;
+    for (int i = 0; i < SUS_NUM_SAMPLES; i++) {
+        float diff = samples[i] - mean;
+        variance += diff * diff;
+    }
+    float sigma = sqrtf(variance / SUS_NUM_SAMPLES);
+
+    // Third pass: average inliers only
+    float lo = mean - SUS_SIGMA_K * sigma;
+    float hi = mean + SUS_SIGMA_K * sigma;
+    float filteredSum = 0;
+    int count = 0;
+    for (int i = 0; i < SUS_NUM_SAMPLES; i++) {
+        if (samples[i] >= lo && samples[i] <= hi) {
+            filteredSum += samples[i];
+            count++;
+        }
+    }
+
+    // Fallback: if every sample was rejected (degenerate — shouldn't happen),
+    // return the unfiltered mean rather than divide-by-zero.
+    if (count == 0) return (int)mean;
+    return (int)(filteredSum / count);
+}
+
 void DataTaskcode(void * pvParameter) {
     // Setup one-time improvements
     sensorBuffer.reserve(MAX_BUFFER_SIZE);
@@ -74,8 +120,8 @@ void DataTaskcode(void * pvParameter) {
                 }
             }
 
-            line.rear_sus = 4095 - analogRead(REAR_SUS_PIN);
-            line.front_sus = analogRead(FRONT_SUS_PIN);
+            line.rear_sus = 4095 - stddevFilteredADC(REAR_SUS_PIN);
+            line.front_sus = stddevFilteredADC(FRONT_SUS_PIN);
 
             sensorBuffer.push_back(line);
 
