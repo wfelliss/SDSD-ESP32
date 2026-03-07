@@ -9,6 +9,7 @@
 <body>
     <div class="container">
         <h1>Connect ESP32 to WiFi</h1>
+        <p id="run-count" style="margin-bottom:18px;color:#007BFF;font-weight:600;">Stored runs: loading...</p>
         <form method="POST" action="/connect">
             <div class="form-group">
                 <label for="ssid">SSID:</label>
@@ -21,5 +22,16 @@
             <button type="submit">Connect</button>
         </form>
     </div>
+    <script>
+        fetch('/runs')
+            .then(r => r.json())
+            .then(files => {
+                const count = files.filter(f => /^run_\d+\.csv$/.test(f.name)).length;
+                document.getElementById('run-count').textContent = 'Stored runs: ' + count;
+            })
+            .catch(() => {
+                document.getElementById('run-count').textContent = 'Stored runs: unavailable';
+            });
+    </script>
 </body>
 </html>
