@@ -8,9 +8,9 @@
 
 // --- External LEDs (D Pins) ---
 // We use D12, D11, and D10 for the LEDs.
-#define RED_LED_PIN 12      // Digital Pin 12
+#define RED_LED_PIN 10      // Digital Pin 12
 #define GREEN_LED_PIN 11    // Digital Pin 11
-#define BLUE_LED_PIN 10     // Digital Pin 10
+#define BLUE_LED_PIN 12     // Digital Pin 10
 
 // --- Button (D Pin) ---
 // We use D9 (GPIO 9) for the button.
