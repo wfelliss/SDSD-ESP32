@@ -26,7 +26,7 @@
         fetch('/runs')
             .then(r => r.json())
             .then(files => {
-                const count = files.filter(f => /^run_\d+\.csv$/.test(f.name)).length;
+                const count = files.length;
                 document.getElementById('run-count').textContent = 'Stored runs: ' + count;
             })
             .catch(() => {
