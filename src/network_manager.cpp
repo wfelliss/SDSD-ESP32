@@ -1,6 +1,7 @@
 #include "network_manager.h"
 #include "globals.h"
 #include "config.h"
+#include "secrets.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <WiFiClientSecure.h>
@@ -337,7 +338,7 @@ void uploadRunTask(void *pvParameter) {
     client->print("Host: " + host + "\r\n");
     client->print("Content-Type: multipart/form-data; boundary=" + boundary + "\r\n");
     client->print("Content-Length: " + String(totalLen) + "\r\n");
-    client->print("X-API-Key: 6beb8f4a809600ce2e2472ff59f542bc01401016b17a83df0118af78f08a2bb9\r\n");
+    client->print("X-API-Key: " API_KEY "\r\n");
     client->print("Connection: close\r\n\r\n");
 
     client->print(jsonPart);
