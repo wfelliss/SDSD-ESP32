@@ -11,5 +11,5 @@ struct SensorLine {
 extern std::vector<SensorLine> sensorBuffer;
 
 bool initStorage();
-void startNewRun();
+void startNewRun(const int initialAcc[6]);
 void flushSensorBuffer();
