@@ -72,6 +72,12 @@ void setupWebRoutes() {
         request->send(200, "application/json", json);
     });
 
+    server.on("/battery", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String json = "{\"percent\":" + String(batteryPercent) + "}";
+        request->send(200, "application/json", json);
+    });
+
+
     server.on("/uploadRun", HTTP_POST, [](AsyncWebServerRequest *request){
         Serial.println("[ENDPOINT] /uploadRun POST received");
 

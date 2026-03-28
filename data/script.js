@@ -138,8 +138,28 @@ async function waitForFileDeletion(runName, timeoutMs = 20000, intervalMs = 1000
     }
     return false;
 }
-// Load runs on page load
+async function loadBattery() {
+    try {
+        const response = await fetch('/battery');
+        const data = await response.json();
+        const pct = data.percent;
+        const el = document.getElementById('battery-status');
+        if (!el) return;
+        if (pct < 0) { el.textContent = 'Battery: unknown'; el.style.color = '#555'; return; }
+        el.textContent = 'Battery: ' + pct + '%';
+        el.style.color = pct > 50 ? '#28a745' : pct > 20 ? '#fd7e14' : '#dc3545';
+    } catch {
+        const el = document.getElementById('battery-status');
+        if (el) el.textContent = 'Battery: unavailable';
+    }
+}
+
+// Load runs and battery on page load
 loadRuns();
+loadBattery();
 
 // Add Refresh button functionality
-document.getElementById('refreshBtn').addEventListener('click', loadRuns);
+document.getElementById('refreshBtn').addEventListener('click', () => {
+    loadRuns();
+    loadBattery();
+});

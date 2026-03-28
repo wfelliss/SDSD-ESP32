@@ -21,6 +21,20 @@ void setup() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(ONBOARD_LED_PIN, OUTPUT);
 
+    // Enable NeoPixel power and initialise
+    pinMode(NEOPIXEL_POWER_PIN, OUTPUT);
+    digitalWrite(NEOPIXEL_POWER_PIN, HIGH);
+    neopixel.begin();
+    neopixel.setBrightness(NEOPIXEL_BRIGHTNESS);
+    updateBatteryNeopixel(); // show default green on boot
+
+    // Initialise MAX17048 fuel gauge (I2C, address 0x36)
+    if (!maxlipo.begin()) {
+        Serial.println("[BATT] MAX17048 not found — battery % unavailable");
+    } else {
+        Serial.println("[BATT] MAX17048 found");
+    }
+
     setLedColor(1, 1, 1); // Loading state
 
     if (!initStorage()) {

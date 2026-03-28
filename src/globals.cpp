@@ -1,8 +1,13 @@
 #include "globals.h"
 #include "config.h"
 #include <WiFi.h>
+#include <Adafruit_NeoPixel.h>
+#include <Adafruit_MAX1704X.h>
 
 AsyncWebServer server(80);
+Adafruit_NeoPixel neopixel(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_MAX17048 maxlipo;
+volatile int batteryPercent = -1;
 volatile bool wifiConnected = false;
 volatile bool startWiFiConnect = false;
 volatile int recording = 0; // 0 = not recording, 1 = setup, 2 = recording
@@ -54,4 +59,14 @@ void setLedColor(uint8_t red, uint8_t green, uint8_t blue) {
     digitalWrite(RED_LED_PIN, red ? HIGH : LOW);
     digitalWrite(GREEN_LED_PIN, green ? HIGH : LOW);
     digitalWrite(BLUE_LED_PIN, blue ? HIGH : LOW);
+}
+
+void updateBatteryNeopixel() {
+    uint32_t color;
+    if (batteryPercent < 0)          color = neopixel.Color(0, 150, 0);   // default green before first read
+    else if (batteryPercent > 50)    color = neopixel.Color(0, 150, 0);   // green
+    else if (batteryPercent > 20)    color = neopixel.Color(255, 80, 0);  // orange
+    else                             color = neopixel.Color(150, 0, 0);   // red
+    neopixel.setPixelColor(0, color);
+    neopixel.show();
 }
