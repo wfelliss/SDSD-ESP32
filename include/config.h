@@ -26,6 +26,17 @@
 #define FRONT_SUS_PIN 15    // A3
 #define REAR_SUS_PIN 14     // A4
 
+// --- Onboard NeoPixel ---
+// Adafruit Feather ESP32-S3: NeoPixel data on GPIO 33, power enable on GPIO 21
+#define NEOPIXEL_PIN             33
+#define NEOPIXEL_POWER_PIN       21
+#define NEOPIXEL_COUNT           1
+#define NEOPIXEL_BRIGHTNESS      50   // 0-255; keep low to avoid power noise
+
+// --- Battery Monitoring ---
+// Battery % is read from the MAX17048 fuel gauge IC over I2C (address 0x36, SDA=3, SCL=4)
+#define BATTERY_READ_INTERVAL_MS 30000UL
+
 // --- Constants ---
 const unsigned long SAMPLE_PERIOD_MS = 10;
 const unsigned int SAMPLE_FREQUENCY = 1000 / SAMPLE_PERIOD_MS;
