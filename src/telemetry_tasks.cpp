@@ -268,12 +268,28 @@ void WiFiTaskcode(void * pvParameter) {
     setupWebRoutes();
     server.begin();
     WiFi.onEvent(WiFiEvent);
+
+    unsigned long lastBatteryReadMs = millis() - BATTERY_READ_INTERVAL_MS; // trigger immediate first read
+
     while (true) {
         if (startWiFiConnect) {
             startWiFiConnect = false;
             connectToWiFi();
         }
         updateOnBoardLed();
+
+        unsigned long now = millis();
+        if (now - lastBatteryReadMs >= BATTERY_READ_INTERVAL_MS) {
+            lastBatteryReadMs = now;
+            float pct = maxlipo.cellPercent();
+            float voltage = maxlipo.cellVoltage();
+            if (pct < 0.0f) pct = 0.0f;
+            if (pct > 100.0f) pct = 100.0f;
+            batteryPercent = (int)pct;
+            updateBatteryNeopixel();
+            Serial.printf("[BATT] voltage=%.3fV percent=%d%%\n", voltage, batteryPercent);
+        }
+
         vTaskDelay(50 / portTICK_PERIOD_MS);
     }
 }

@@ -10,6 +10,7 @@
     <div class="container">
         <h1>Connect ESP32 to WiFi</h1>
         <p id="run-count" style="margin-bottom:18px;color:#007BFF;font-weight:600;">Stored runs: loading...</p>
+        <p id="battery-status" style="margin-bottom:18px;color:#555;font-weight:600;">Battery: loading...</p>
         <form method="POST" action="/connect">
             <div class="form-group">
                 <label for="ssid">SSID:</label>
@@ -32,6 +33,18 @@
             .catch(() => {
                 document.getElementById('run-count').textContent = 'Stored runs: unavailable';
             });
-    </script>
+        fetch('/battery')
+            .then(r => r.json())
+            .then(data => {
+                const pct = data.percent;
+                const el = document.getElementById('battery-status');
+                if (pct < 0) { el.textContent = 'Battery: unknown'; return; }
+                el.textContent = 'Battery: ' + pct + '%';
+                el.style.color = pct > 50 ? '#28a745' : pct > 20 ? '#fd7e14' : '#dc3545';
+            })
+            .catch(() => {
+                document.getElementById('battery-status').textContent = 'Battery: unavailable';
+            });
+</script>
 </body>
 </html>
