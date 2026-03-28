@@ -11,7 +11,7 @@ bool initStorage() {
     return lfs && sd;
 }
 
-void startNewRun() {
+void startNewRun(const int initialAcc[6]) {
     if (!SD.begin(SD_CS_PIN)) {
         Serial.println("[ERROR] SD Card mount failed");
         setLedColor(0, 0, 1); // Blue Failed
@@ -57,8 +57,11 @@ void startNewRun() {
         return;
     }
 
-    file.println("acc1,acc2,acc3,acc4,acc5,acc6,rear_sus,front_sus");
-    file.print("0,0,0,0,0,0,");
+    file.println("gyro_x_world_mrads,gyro_y_world_mrads,gyro_z_world_mrads,accel_x_world_mg,accel_y_world_mg,accel_z_world_mg,rear_sus,front_sus");
+    for (int i = 0; i < 6; i++) {
+        file.print(initialAcc[i]);
+        file.print(",");
+    }
     file.print(4095 - analogRead(REAR_SUS_PIN));
     file.print(",");
     file.println(analogRead(FRONT_SUS_PIN));
