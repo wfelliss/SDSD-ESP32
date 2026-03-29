@@ -11,53 +11,48 @@ bool initStorage() {
     return lfs && sd;
 }
 
-void startNewRun(const int initialAcc[6]) {
-    if (!SD.begin(SD_CS_PIN)) {
-        Serial.println("[ERROR] SD Card mount failed");
-        setLedColor(0, 0, 1); // Blue Failed
-        return;
+static int parseRunNumber(const String& fname) {
+    String name = fname.startsWith("/") ? fname.substring(1) : fname;
+
+    if (!name.startsWith("run_") || !name.endsWith(".csv")) return -1;
+
+    int underscore = name.indexOf('_');
+    int dot = name.lastIndexOf('.');
+    if (underscore < 0 || dot <= underscore) return -1;
+
+    String numStr = name.substring(underscore + 1, dot);
+    if (numStr.length() == 0) return -1;
+
+    for (size_t i = 0; i < numStr.length(); ++i) {
+        if (!isDigit(numStr.charAt(i))) return -1;
     }
 
-    // Determine next run number by scanning SD root for existing run_<n>.csv files
+    return numStr.toInt();
+}
+
+static int findNextRunNumber() {
     int maxRun = 0;
+
     File root = SD.open("/");
-    if (root) {
-        File file = root.openNextFile();
-        while (file) {
-            if (!file.isDirectory()) {
-                String fname = String(file.name());
-                if (fname.startsWith("/")) fname = fname.substring(1);
-                if (fname.startsWith("run_") && fname.endsWith(".csv")) {
-                    int u = fname.indexOf('_');
-                    int d = fname.lastIndexOf('.');
-                    if (u >= 0 && d > u) {
-                        String numStr = fname.substring(u + 1, d);
-                        bool allDigits = true;
-                        for (size_t i = 0; i < numStr.length(); ++i) {
-                            if (!isDigit(numStr.charAt(i))) { allDigits = false; break; }
-                        }
-                        if (allDigits) {
-                            int val = numStr.toInt();
-                            if (val > maxRun) maxRun = val;
-                        }
-                    }
-                }
-            }
-            file = root.openNextFile();
+    if (!root) return 1;
+
+    File entry = root.openNextFile();
+    while (entry) {
+        if (!entry.isDirectory()) {
+            int runNum = parseRunNumber(String(entry.name()));
+            if (runNum > maxRun) maxRun = runNum;
         }
-        root.close();
-    }
-    int nextRun = maxRun + 1;
-    currentRunFilePath = "/run_" + String(nextRun) + ".csv";
-
-    File file = SD.open(currentRunFilePath.c_str(), FILE_WRITE);
-    if (!file) {
-        Serial.println("[ERROR] Failed to create run file: " + currentRunFilePath);
-        setLedColor(0, 0, 1); // Blue Failed
-        return;
+        entry.close();
+        entry = root.openNextFile();
     }
 
+    root.close();
+    return maxRun + 1;
+}
+
+static void writeRunHeader(File& file, const int initialAcc[6]) {
     file.println("gyro_x_world_mrads,gyro_y_world_mrads,gyro_z_world_mrads,accel_x_world_mg,accel_y_world_mg,accel_z_world_mg,rear_sus,front_sus");
+
     for (int i = 0; i < 6; i++) {
         file.print(initialAcc[i]);
         file.print(",");
@@ -65,6 +60,26 @@ void startNewRun(const int initialAcc[6]) {
     file.print(4095 - analogRead(REAR_SUS_PIN));
     file.print(",");
     file.println(analogRead(FRONT_SUS_PIN));
+}
+
+void startNewRun(const int initialAcc[6]) {
+    if (!SD.begin(SD_CS_PIN)) {
+        Serial.println("[ERROR] SD Card mount failed");
+        setLedColor(0, 0, 255);
+        return;
+    }
+
+    int nextRun = findNextRunNumber();
+    currentRunFilePath = "/run_" + String(nextRun) + ".csv";
+
+    File file = SD.open(currentRunFilePath.c_str(), FILE_WRITE);
+    if (!file) {
+        Serial.println("[ERROR] Failed to create run file: " + currentRunFilePath);
+        setLedColor(0, 0, 255);
+        return;
+    }
+
+    writeRunHeader(file, initialAcc);
     file.close();
 
     sensorBuffer.clear();

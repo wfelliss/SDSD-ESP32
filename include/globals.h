@@ -31,5 +31,6 @@ extern volatile int batteryPercent;   // 0-100, or -1 if not yet read
 enum LedMode { LED_OFF = 0, LED_BLINK = 1, LED_SOLID = 2 };
 void updateOnBoardLed();
 void setOnboardLed(int mode, unsigned long interval = 500);
+void initLedPwm();
 void setLedColor(uint8_t red, uint8_t green, uint8_t blue);
 void updateBatteryNeopixel();

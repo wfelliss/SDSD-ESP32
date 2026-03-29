@@ -55,10 +55,19 @@ void setOnboardLed(int mode, unsigned long interval) {
     }
 }
 
+static constexpr uint32_t PWM_FREQ_HZ  = 5000;
+static constexpr uint8_t  PWM_BITS     = 8;
+
+void initLedPwm() {
+    ledcAttach(RED_LED_PIN,   PWM_FREQ_HZ, PWM_BITS);
+    ledcAttach(GREEN_LED_PIN, PWM_FREQ_HZ, PWM_BITS);
+    ledcAttach(BLUE_LED_PIN,  PWM_FREQ_HZ, PWM_BITS);
+}
+
 void setLedColor(uint8_t red, uint8_t green, uint8_t blue) {
-    digitalWrite(RED_LED_PIN, red ? HIGH : LOW);
-    digitalWrite(GREEN_LED_PIN, green ? HIGH : LOW);
-    digitalWrite(BLUE_LED_PIN, blue ? HIGH : LOW);
+    ledcWrite(RED_LED_PIN,   red);
+    ledcWrite(GREEN_LED_PIN, green);
+    ledcWrite(BLUE_LED_PIN,  blue);
 }
 
 void updateBatteryNeopixel() {

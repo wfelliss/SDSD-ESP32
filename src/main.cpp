@@ -15,9 +15,7 @@ void setup() {
     WiFi.setTxPower(WIFI_POWER_8_5dBm); // Set WiFi transmit power to 8.5 dBm
 
     // Hardware Setup
-    pinMode(RED_LED_PIN, OUTPUT);
-    pinMode(GREEN_LED_PIN, OUTPUT);
-    pinMode(BLUE_LED_PIN, OUTPUT);
+    initLedPwm();
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     pinMode(ONBOARD_LED_PIN, OUTPUT);
 
@@ -35,11 +33,11 @@ void setup() {
         Serial.println("[BATT] MAX17048 found");
     }
 
-    setLedColor(1, 1, 1); // Loading state
+    setLedColor(255, 255, 255); // Loading state — white
 
     if (!initStorage()) {
         Serial.println("Storage Critical Failure");
-        setLedColor(0, 0, 1);
+        setLedColor(0, 0, 255); // blue — critical failure
         return;
     }
 
@@ -47,7 +45,7 @@ void setup() {
     xTaskCreatePinnedToCore(WiFiTaskcode, "WiFiTask", 12000, NULL, 1, NULL, 1); // Core 1
     xTaskCreatePinnedToCore(DataTaskcode, "DataTask", 10000, NULL, 1, NULL, 0); // Core 0
 
-    setLedColor(0, 1, 0); // Ready
+    setLedColor(0, 255, 0); // green — ready
 }
 
 void loop() {

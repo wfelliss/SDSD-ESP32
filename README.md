@@ -94,11 +94,14 @@ The codebase is modularized to separate hardware configuration, global state, st
 
 | Component | Pin | Notes |
 | :--- | :--- | :--- |
-| **Button** | GPIO 14 | Active LOW; cycles Idle ➔ Setup ➔ Record. |
-| **Onboard LED** | GPIO 2 | WiFi connection status. |
-| **RGB LED** | 25, 26, 27 | R, G, B pins for status indicators. |
+| **Button** | GPIO 9 | Active LOW; cycles Idle ➔ Setup ➔ Record. |
+| **Onboard LED** | GPIO 13 | WiFi connection status. |
+| **RGB LED** | R=10, G=11, B=12 | Status indicators. |
+| **NeoPixel** | GPIO 33 (data), GPIO 21 (power) | Battery level indicator. |
 | **SD Card CS** | GPIO 5 | SPI Chip Select for storage. |
-| **Suspension** | 34 (F), 35 (R) | Analog inputs for travel measurement. |
+| **Front Suspension** | GPIO 15 (A3) | Analog input for travel measurement. |
+| **Rear Suspension** | GPIO 14 (A4) | Analog input for travel measurement. |
+| **Battery Gauge I2C** | SDA=3, SCL=4 | MAX17048 at address 0x36. |
 
 ---
 
