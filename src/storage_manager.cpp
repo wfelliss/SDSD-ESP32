@@ -88,6 +88,7 @@ void startNewRun(const int initialAcc[6]) {
 
 void flushSensorBuffer() {
     if (sensorBuffer.empty() || currentRunFilePath == "") return;
+    
 
     File file = SD.open(currentRunFilePath.c_str(), FILE_APPEND);
     if (!file) {
