@@ -6,17 +6,12 @@
 #include <Adafruit_MAX1704X.h>
 
 extern AsyncWebServer server;
-extern volatile bool wifiConnected;
-extern volatile bool startWiFiConnect;
 extern volatile int recording;
 
-extern String ssidInput;
-extern String passwordInput;
 extern String currentRunFilePath;
 
 extern TaskHandle_t WiFiTask;
 extern TaskHandle_t DataTask;
-extern TaskHandle_t UploadTask;
 
 extern int currentOnboardLedMode;
 extern bool ledState;

@@ -8,12 +8,8 @@ AsyncWebServer server(80);
 Adafruit_NeoPixel neopixel(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_MAX17048 maxlipo;
 volatile int batteryPercent = -1;
-volatile bool wifiConnected = false;
-volatile bool startWiFiConnect = false;
 volatile int recording = 0; // 0 = not recording, 1 = setup, 2 = recording
 
-String ssidInput = "";
-String passwordInput = "";
 String currentRunFilePath = "";
 
 int currentOnboardLedMode = LED_OFF;
@@ -23,7 +19,6 @@ unsigned long blinkInterval = 500;
 
 TaskHandle_t WiFiTask = NULL;
 TaskHandle_t DataTask = NULL;
-TaskHandle_t UploadTask = NULL;
 
 void updateOnBoardLed() {
     if (currentOnboardLedMode == LED_BLINK) {

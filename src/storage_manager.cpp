@@ -1,14 +1,11 @@
 #include "storage_manager.h"
 #include "globals.h"
 #include <SD.h>
-#include <LittleFS.h>
 
 std::vector<SensorLine> sensorBuffer;
 
 bool initStorage() {
-    bool lfs = LittleFS.begin(true);
-    bool sd = SD.begin(SD_CS_PIN);
-    return lfs && sd;
+    return SD.begin(SD_CS_PIN);
 }
 
 static int parseRunNumber(const String& fname) {

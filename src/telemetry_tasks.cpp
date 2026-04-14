@@ -188,19 +188,14 @@ void DataTaskcode(void* pvParameter) {
 }
 
 void WiFiTaskcode(void* pvParameter) {
-    startAP();
+    WiFi.softAP("SDSD", "SDSD1234");
+    Serial.println("[WIFI] AP started — SSID: SDSD, IP: 192.168.4.1");
     setupWebRoutes();
     server.begin();
-    WiFi.onEvent(WiFiEvent);
 
     unsigned long lastBatteryReadMs = millis() - BATTERY_READ_INTERVAL_MS;  // trigger immediate first read
 
     while (true) {
-        if (startWiFiConnect) {
-            startWiFiConnect = false;
-            connectToWiFi();
-        }
-
         updateOnBoardLed();
 
         unsigned long now = millis();
