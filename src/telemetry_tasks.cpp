@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "storage_manager.h"
 #include "network_manager.h"
+#include "suspension_cal.h"
 
 // ─── Suspension ADC ───────────────────────────────────────────────────────────
 
@@ -131,8 +132,11 @@ static SensorLine captureSensorLine(ImuState& imu, uint64_t& accumImuUs) {
     populateImuReadingIntoLine(imu, line);
     accumImuUs += micros() - tImuStart;
 
-    line.rear_sus  = 4095 - stddevFilteredADC(REAR_SUS_PIN);
-    line.front_sus = stddevFilteredADC(FRONT_SUS_PIN);
+    int rawRear  = 4095 - stddevFilteredADC(REAR_SUS_PIN);
+    int rawFront = stddevFilteredADC(FRONT_SUS_PIN);
+
+    line.rear_sus  = correctSuspension(rawRear,  REAR_SUS_CAL,  REAR_SUS_CAL_SIZE);
+    line.front_sus = correctSuspension(rawFront, FRONT_SUS_CAL, FRONT_SUS_CAL_SIZE);
 
     return line;
 }

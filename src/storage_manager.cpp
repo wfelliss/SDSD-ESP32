@@ -1,4 +1,5 @@
 #include "storage_manager.h"
+#include "suspension_cal.h"
 #include "globals.h"
 #include <SD.h>
 
@@ -54,9 +55,12 @@ static void writeRunHeader(File& file, const int initialAcc[6]) {
         file.print(initialAcc[i]);
         file.print(",");
     }
-    file.print(4095 - analogRead(REAR_SUS_PIN));
+    int rawRear  = 4095 - analogRead(REAR_SUS_PIN);
+    int rawFront = analogRead(FRONT_SUS_PIN);
+
+    file.print(correctSuspension(rawRear,  REAR_SUS_CAL,  REAR_SUS_CAL_SIZE));
     file.print(",");
-    file.println(analogRead(FRONT_SUS_PIN));
+    file.println(correctSuspension(rawFront, FRONT_SUS_CAL, FRONT_SUS_CAL_SIZE));
 }
 
 void startNewRun(const int initialAcc[6]) {

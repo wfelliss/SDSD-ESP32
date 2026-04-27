@@ -23,8 +23,8 @@
 // --- Analog Inputs (Keep on Analog Side) ---
 // We keep these on the Analog header (A3/A4) because D5-D13 are digital.
 // Note: You can technically use D-pins for analog on S3, but keeping them separate is cleaner.
-#define FRONT_SUS_PIN 15    // A3
-#define REAR_SUS_PIN 14     // A4
+#define FRONT_SUS_PIN 14    // A3
+#define REAR_SUS_PIN 15     // A4
 
 // --- Onboard NeoPixel ---
 // Adafruit Feather ESP32-S3: NeoPixel data on GPIO 33, power enable on GPIO 21
